@@ -1,0 +1,7 @@
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpmdb.8
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpme.8
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpmi.8
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpmquery.8
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpmsign.8
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpmu.8
+usr/share/man/man8/rpm.8 usr/share/man/man8/rpmverify.8

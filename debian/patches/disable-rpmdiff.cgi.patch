@@ -1,0 +1,27 @@
+Disable rpmdiff.cgi because it is insecure
+
+From:  <>
+
+
+---
+
+ scripts/rpmdiff.cgi |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/scripts/rpmdiff.cgi b/scripts/rpmdiff.cgi
+index c28478b..02b7cd0 100644
+--- a/scripts/rpmdiff.cgi
++++ b/scripts/rpmdiff.cgi
+@@ -1,5 +1,12 @@
+ #!/usr/bin/perl
+ 
++# !!!WARNING!!!
++# This cgi script is INSECURE.
++# It puts /tmp into the PATH; uses random unsafe directories like
++# /tmp/webtools, overwrites files insecurely, and reads files from insecure
++# directories in /tmp as perl code. Do NOT use it.
++die "This program is disabled because it is insecure.\n";
++
+ # a web interface to 'cvs rdiff'.  This script makes it easy to query
+ # the tags which are created by the build script.
+ 

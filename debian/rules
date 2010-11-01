@@ -1,0 +1,114 @@
+#!/usr/bin/make -f
+
+DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_GNU_TYPE  := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_HOST_ARCH_OS   := $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+
+PYDEF   := $(shell pyversions -vd)
+PYVERS  := $(shell pyversions -vr debian/control)
+PYEXTRA := $(filter-out $(PYDEF), $(PYVERS))
+
+ifeq (linux,$(DEB_HOST_ARCH_OS))
+       SELINUXLIBS = -lselinux -lsepol
+else
+       SELINUXLIBS = -lsepol
+endif
+
+ifeq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	configure_flags += --build=$(DEB_BUILD_GNU_TYPE)
+else
+	configure_flags += --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+CPPFLAGS=-I./ $(shell pkg-config --cflags lua5.1) $(shell pkg-config --cflags nss)
+
+
+configure_flags += \
+	--prefix=/usr \
+	--mandir=/usr/share/man \
+	--sysconfdir=/etc \
+	--localstatedir=/var \
+	--datadir=/usr/share \
+	--with-external-db \
+	--with-lua \
+	--with-debian \
+	CPPFLAGS="$(CPPFLAGS)"
+
+dir-%:
+	mkdir b-$*
+
+.PHOHY: autoreconf
+autoreconf:
+	./autogen.sh --noconfigure
+
+configure-lsb: dir-lsb autoreconf
+	cd b-lsb && ../configure \
+		$(configure_flags) \
+		--disable-shared \
+		--enable-static \
+		--disable-python
+
+configure-default: dir-default autoreconf
+	cd b-default && ../configure \
+		$(configure_flags) \
+		--enable-shared \
+		--enable-python
+
+configure-python-%: dir-python-% autoreconf
+	cd b-python-$* && ../configure \
+		$(configure_flags) \
+		--enable-shared \
+		--enable-python \
+		PYTHON=/usr/bin/python$* \
+		__PYTHON=/usr/bin/python$*
+
+override_dh_auto_configure: configure-default configure-lsb $(PYEXTRA:%=configure-python-%)
+
+build-%:
+	$(MAKE) -C b-$*
+
+override_dh_auto_build: build-default build-lsb $(PYEXTRA:%=build-python-%)
+
+install-%:
+	$(MAKE) -C b-$* DESTDIR=`pwd`/debian/tmp install
+
+install-lsb:
+	install -d debian/tmp/usr/bin
+	install b-lsb/rpm debian/tmp/usr/bin/lsb-rpm
+	install b-lsb/rpmbuild debian/tmp/usr/bin/lsb-rpmbuild
+
+override_dh_auto_install: install-default install-lsb $(PYEXTRA:%=install-python-%)
+	# Kill all the junk this installs.
+	rm -f debian/tmp/usr/lib/rpm/config.guess \
+		debian/tmp/usr/lib/rpm/config.sub \
+		debian/tmp/usr/lib/rpm/config.site \
+		debian/tmp/usr/lib/rpm/rpmdiff.cgi \
+		debian/tmp/usr/lib/*.la \
+		debian/tmp/usr/lib/rpm/rpm.xinetd \
+		debian/tmp/usr/lib/rpm/rpm.log
+	# Fix permissions
+	chmod -x \
+		debian/tmp/usr/lib/rpm/macros.php \
+		debian/tmp/usr/lib/rpm/macros.perl \
+		debian/tmp/usr/lib/rpm/macros.python \
+		debian/tmp/usr/lib/python*/*/rpm/*.py
+	chmod +x debian/tmp/usr/lib/rpm/rpm.daily
+
+override_dh_strip:
+	dh_strip --dbg-package=librpm-dbg
+
+build:
+	dh $@
+
+clean:
+	dh $@
+	rm -rf b-*
+
+binary-indep: build
+	dh $@
+
+binary-arch: build
+	dh $@
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary build-% dir-% install-%

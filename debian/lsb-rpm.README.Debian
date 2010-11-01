@@ -1,0 +1,10 @@
+This package is intended to be used to build RPM v3 packages that are LSB
+compliant. It provides a /usr/bin/lsb-rpm program, that can only be used to
+build (not query or install) RPM v3 packages. (rpm currently builds RPM v3
+packages by default, but should that change, lsb-rpm will continue to build
+v3 packages.)
+
+Use regular rpm for querying, installation, etc. The lsb-rpm binary is
+statically linked, so it will work in the lsbdev environment.
+
+-- Joey Hess <joeyh@debian.org>

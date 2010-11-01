@@ -1,0 +1,25 @@
+.TH LSB-RPM 1
+.SH NAME
+lsb-rpmbuild \- build a LSB package
+.SH SYNOPSIS
+.B lsb-rpmbuild \-ba package.spec
+.SH "DESCRIPTION"
+This is a special version of rpm that can only be used to build RPM v3
+format packages, for use as LSB packages. It cannot query or install
+packages, just build them. See the BUILD OPTIONS section of
+.BR rpmbuild(8)
+for the details.
+
+Please note that using lsb-rpm itself does not have to be enough to
+create LSB compliant package, you will also need to disable some RPM
+tags:
+
+    %_use_internal_dependency_generator 0
+
+.SH "SEE ALSO"
+.BR rpmbuild(8)
+,
+.BR lsb-rpm(1)
+.SH AUTHOR
+This manual page was written by Joey Hess,
+for the Debian GNU/Linux system.

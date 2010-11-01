@@ -1,0 +1,13 @@
+kfreebsd.patch
+hurd.patch
+installplatform-verbose.patch
+installplatform-fix-arm.patch
+rpmdb-in-home.patch
+manpage-dash.patch
+disable-rpmdiff.cgi.patch
+debian-disable-rpm.patch
+fix-directories.patch
+tempfile.patch
+no-linux-gate.so-dependancy.patch
+autogen-cleanup.patch
+lua-libname.patch
