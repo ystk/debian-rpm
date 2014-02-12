@@ -7,7 +7,6 @@ usr/lib/rpm/brp*
 usr/lib/rpm/check*
 usr/lib/rpm/debugedit
 usr/lib/rpm/find*
-usr/lib/rpm/javadeps
 usr/lib/rpm/libtool*
 usr/lib/rpm/mkinstalldirs
 usr/lib/rpm/mono*
@@ -21,6 +20,13 @@ usr/lib/rpm/rpmd*
 usr/lib/rpm/rpmpopt-*
 usr/lib/rpm/tcl*
 usr/lib/rpm/tgpg
+usr/lib/rpm/script.req
+usr/lib/rpm/fontconfig.prov
+usr/lib/rpm/ocaml-find-requires.sh
+usr/lib/rpm/elfdeps
+usr/lib/rpm/desktop-file.prov
+usr/lib/rpm/ocaml-find-provides.sh
+usr/lib/rpm/fileattrs
 usr/share/man/man1/*
 usr/share/man/man8/rpm.*
 usr/share/man/man8/rpm[a-z]*.*

@@ -1,0 +1,7 @@
+<map id="structs" name="structs">
+<area shape="rect" id="node1" href="$group__header.html" title="Header API." alt="" coords="250,5,345,32"/>
+<area shape="rect" id="node2" href="$group__rpmbuild.html" title="Build API." alt="" coords="257,56,338,83"/>
+<area shape="rect" id="node4" href="$group__rpmdb.html" title="Database API." alt="" coords="243,107,351,133"/>
+<area shape="rect" id="node5" href="$group__signature.html" title="Signature API." alt="" coords="244,157,351,184"/>
+<area shape="rect" id="node6" href="$group__rpmrc.html" title="RPMRC." alt="" coords="259,208,335,235"/>
+</map>

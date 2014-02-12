@@ -6,14 +6,14 @@
 #include "system.h"
 
 #include <rpm/header.h>
-#include <rpm/rpmbuild.h>
 #include <rpm/rpmlog.h>
+#include "build/rpmbuild_internal.h"
 #include "debug.h"
 
 #define SKIPSPACE(s) { while (*(s) && risspace(*(s))) (s)++; }
 #define SKIPNONSPACE(s) { while (*(s) && !risspace(*(s))) (s)++; }
 
-void addChangelogEntry(Header h, time_t time, const char *name, const char *text)
+static void addChangelogEntry(Header h, time_t time, const char *name, const char *text)
 {
     rpm_time_t mytime = time;	/* XXX convert to header representation */
 				
@@ -40,7 +40,7 @@ static int dateToTimet(const char * datestr, time_t * secs)
     static const char * const months[] =
 	{ "Jan", "Feb", "Mar", "Apr", "May", "Jun",
  	  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", NULL };
-    static const char const lengths[] =
+    static const char lengths[] =
 	{ 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
     
     memset(&time, 0, sizeof(time));
@@ -80,7 +80,7 @@ static int dateToTimet(const char * datestr, time_t * secs)
     /* year */
     p = pe; SKIPSPACE(p);
     if (*p == '\0') goto exit;
-    pe = p; SKIPNONSPACE(pe); if (*pe != '\0') *pe++ = '\0';
+    pe = p; SKIPNONSPACE(pe); if (*pe != '\0') *pe = '\0';
     time.tm_year = strtol(p, &q, 10);
     if (!(q && *q == '\0')) goto exit;
     if (time.tm_year < 1990 || time.tm_year >= 3000) goto exit;
@@ -111,16 +111,16 @@ exit:
  * @param sb		changelog strings
  * @return		RPMRC_OK on success
  */
-static rpmRC addChangelog(Header h, StringBuf sb)
+static rpmRC addChangelog(Header h, ARGV_const_t sb)
 {
-    char *s;
+    char *s, *sp;
     int i;
     time_t time;
     time_t lastTime = 0;
     time_t trimtime = rpmExpandNumeric("%{?_changelog_trimtime}");
     char *date, *name, *text, *next;
 
-    s = getStringBuf(sb);
+    s = sp = argvJoin(sb, "");
 
     /* skip space */
     SKIPSPACE(s);
@@ -205,6 +205,7 @@ static rpmRC addChangelog(Header h, StringBuf sb)
 	
 	s = next;
     }
+    free(sp);
 
     return RPMRC_OK;
 }
@@ -212,7 +213,7 @@ static rpmRC addChangelog(Header h, StringBuf sb)
 int parseChangelog(rpmSpec spec)
 {
     int nextPart, rc, res = PART_ERROR;
-    StringBuf sb = newStringBuf();
+    ARGV_t sb = NULL;
     
     /* There are no options to %changelog */
     if ((rc = readLine(spec, STRIP_COMMENTS)) > 0) {
@@ -223,7 +224,7 @@ int parseChangelog(rpmSpec spec)
     }
     
     while (! (nextPart = isPart(spec->line))) {
-	appendStringBuf(sb, spec->line);
+	argvAdd(&sb, spec->line);
 	if ((rc = readLine(spec, STRIP_COMMENTS)) > 0) {
 	    nextPart = PART_NONE;
 	    break;
@@ -232,13 +233,13 @@ int parseChangelog(rpmSpec spec)
 	}
     }
 
-    if (addChangelog(spec->packages->header, sb)) {
+    if (sb && addChangelog(spec->packages->header, sb)) {
 	goto exit;
     }
     res = nextPart;
 
 exit:
-    sb = freeStringBuf(sb);
+    argvFree(sb);
 
     return res;
 }

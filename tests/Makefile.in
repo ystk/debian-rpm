@@ -51,11 +51,18 @@ mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
+AM_V_GEN = $(am__v_GEN_$(V))
+am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
+am__v_GEN_0 = @echo "  GEN   " $@;
+AM_V_at = $(am__v_at_$(V))
+am__v_at_ = $(am__v_at_$(AM_DEFAULT_VERBOSITY))
+am__v_at_0 = @
 SOURCES =
 DIST_SOURCES =
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
+AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
 AS = @AS@
 AUTOCONF = @AUTOCONF@
@@ -75,6 +82,7 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DOXYGEN = @DOXYGEN@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -108,7 +116,10 @@ LN_S = @LN_S@
 LTLIBICONV = @LTLIBICONV@
 LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
+LUA_CFLAGS = @LUA_CFLAGS@
+LUA_LIBS = @LUA_LIBS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MSGFMT = @MSGFMT@
 MSGFMT_015 = @MSGFMT_015@
@@ -127,6 +138,9 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
 PYTHON = @PYTHON@
 PYTHON_EXEC_PREFIX = @PYTHON_EXEC_PREFIX@
@@ -134,14 +148,10 @@ PYTHON_PLATFORM = @PYTHON_PLATFORM@
 PYTHON_PREFIX = @PYTHON_PREFIX@
 PYTHON_VERSION = @PYTHON_VERSION@
 RANLIB = @RANLIB@
-RPMCANONARCH = @RPMCANONARCH@
-RPMCANONCOLOR = @RPMCANONCOLOR@
 RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
-RPM_MKDIR = @RPM_MKDIR@
-RPM_MKDIR_P = @RPM_MKDIR_P@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -152,10 +162,7 @@ WITH_ACL_LIB = @WITH_ACL_LIB@
 WITH_BZ2_LIB = @WITH_BZ2_LIB@
 WITH_CAP_LIB = @WITH_CAP_LIB@
 WITH_DB_LIB = @WITH_DB_LIB@
-WITH_LIBELF_INCLUDE = @WITH_LIBELF_INCLUDE@
 WITH_LIBELF_LIB = @WITH_LIBELF_LIB@
-WITH_LUA_INCLUDE = @WITH_LUA_INCLUDE@
-WITH_LUA_LIB = @WITH_LUA_LIB@
 WITH_LZMA_LIB = @WITH_LZMA_LIB@
 WITH_MAGIC_INCLUDE = @WITH_MAGIC_INCLUDE@
 WITH_MAGIC_LIB = @WITH_MAGIC_LIB@
@@ -166,22 +173,20 @@ WITH_POPT_LIB = @WITH_POPT_LIB@
 WITH_PYTHON_INCLUDE = @WITH_PYTHON_INCLUDE@
 WITH_PYTHON_LIB = @WITH_PYTHON_LIB@
 WITH_SELINUX_LIB = @WITH_SELINUX_LIB@
-WITH_SQLITE3_INCLUDE = @WITH_SQLITE3_INCLUDE@
-WITH_SQLITE3_LIB = @WITH_SQLITE3_LIB@
+WITH_SEMANAGE_LIB = @WITH_SEMANAGE_LIB@
 WITH_ZLIB_INCLUDE = @WITH_ZLIB_INCLUDE@
 WITH_ZLIB_LIB = @WITH_ZLIB_LIB@
 XGETTEXT = @XGETTEXT@
 XGETTEXT_015 = @XGETTEXT_015@
 YACC = @YACC@
 YFLAGS = @YFLAGS@
+__7ZIP = @__7ZIP@
 __BZIP2 = @__BZIP2@
 __CAT = @__CAT@
 __CC = @__CC@
 __CHGRP = @__CHGRP@
-__CHGRP_RHF = @__CHGRP_RHF@
 __CHMOD = @__CHMOD@
 __CHOWN = @__CHOWN@
-__CHOWN_RHF = @__CHOWN_RHF@
 __CP = @__CP@
 __CPIO = @__CPIO@
 __CURL = @__CURL@
@@ -191,11 +196,13 @@ __GPG = @__GPG@
 __GREP = @__GREP@
 __GZIP = @__GZIP@
 __ID = @__ID@
-__ID_U = @__ID_U@
 __INSTALL = @__INSTALL@
 __LD = @__LD@
+__LRZIP = @__LRZIP@
+__LZIP = @__LZIP@
 __MAKE = @__MAKE@
 __MKDIR = @__MKDIR@
+__MKDIR_P = @__MKDIR_P@
 __MV = @__MV@
 __NM = @__NM@
 __OBJCOPY = @__OBJCOPY@
@@ -204,9 +211,11 @@ __PATCH = @__PATCH@
 __PERL = @__PERL@
 __PGP = @__PGP@
 __PYTHON = @__PYTHON@
+__RESTORECON = @__RESTORECON@
 __RM = @__RM@
 __RSH = @__RSH@
 __SED = @__SED@
+__SEMODULE = @__SEMODULE@
 __SSH = @__SSH@
 __STRIP = @__STRIP@
 __TAR = @__TAR@
@@ -216,6 +225,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
@@ -250,7 +260,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -278,22 +287,29 @@ rpmlibexecdir = $(prefix)/lib/rpm
 # Host independent config files
 rpmconfigdir = $(prefix)/lib/rpm
 EXTRA_DIST = local.at $(TESTSUITE) $(TESTSUITE_AT) \
-	data/SPECS/hello.spec data/SPECS/foo.spec \
+	data/SPECS/attrtest.spec data/SPECS/hello.spec \
+	data/SPECS/hello-script.spec data/SPECS/foo.spec \
 	data/SPECS/versiontest.spec data/SPECS/conflicttest.spec \
 	data/SPECS/configtest.spec data/SPECS/flangtest.spec \
-	data/SPECS/symlinktest.spec data/SPECS/deptest.spec \
+	data/SPECS/hlinktest.spec data/SPECS/symlinktest.spec \
+	data/SPECS/deptest.spec data/SPECS/verifyscript.spec \
+	data/SPECS/fakeshell.spec data/SPECS/scripts.spec \
+	data/SPECS/selfconflict.spec \
+	data/SOURCES/hello-1.0-modernize.patch \
 	data/SOURCES/hello-1.0.tar.gz data/SOURCES/hello-2.0.tar.gz \
 	data/RPMS/foo-1.0-1.noarch.rpm data/RPMS/hello-1.0-1.i386.rpm \
-	data/RPMS/hello-1.0-1.ppc64.rpm data/SRPMS/foo-1.0-1.src.rpm \
+	data/RPMS/hello-1.0-1.ppc64.rpm data/RPMS/hello-2.0-1.i686.rpm \
+	data/RPMS/hello-2.0-1.x86_64.rpm data/SRPMS/foo-1.0-1.src.rpm \
 	data/SRPMS/hello-1.0-1.src.rpm package.m4 atlocal.in
 CLEANFILES = atconfig
 
 # HACK: This should not be here.
 rpmbindir = `echo $(bindir) | sed -e s,usr/bin,bin,`
 TESTSUITE = $(srcdir)/rpmtests
-TESTSUITE_AT = rpmtests.at rpmgeneral.at rpmquery.at rpmdb.at \
-	rpmbuild.at rpmi.at rpmvercmp.at rpmdeps.at rpmconflict.at \
-	rpmconfig.at rpmmacro.at
+TESTSUITE_AT = rpmtests.at rpmgeneral.at rpmquery.at rpmverify.at \
+	rpmdb.at rpmbuild.at rpmi.at rpmvercmp.at rpmdeps.at \
+	rpmconflict.at rpmconfig.at rpmmacro.at rpmpython.at \
+	rpmdepmatch.at rpmscript.at
 
 # testsuite voodoo
 AUTOTEST = $(AUTOM4TE) --language=autotest
@@ -516,11 +532,23 @@ atlocal:	atlocal.in Makefile
 # Hack: Abusing testing$(bindir)/rpmbuild as stamp file
 testing$(bindir)/rpmbuild: ../rpmbuild
 	rm -rf testing
+	mkdir -p testing/$(bindir)
+	ln -s ./$(bindir) testing/bin
 	(cd ${top_builddir} && \
 	          $(MAKE) DESTDIR=`pwd`/${subdir}/testing install)
+	cp -r data/ testing/
+	mkdir testing/{dev,etc,magic,tmp}
+	for node in stdin stderr stdout null; do ln -s /dev/$${node} testing/dev/$${node}; done
+	for cf in hosts resolv.conf passwd shadow group gshadow mtab fstab; do [ -f /etc/$${cf} ] && ln -s /etc/$${cf} testing/etc/$${cf}; done
+	for prog in gzip cat patch tar sh ln chmod rm mkdir uname grep sed find file mktemp cut sort diff; do p=`which $${prog}`; ln -s $${p} testing/$${p}; done
+	for d in /proc /sys /selinux /etc/selinux; do if [ -d $${d} ]; then ln -s $${d} testing/$${d}; fi; done
+	(cd testing/magic && file -C)
 
-check-local: $(check_DATA)
-	$(SHELL) '$(TESTSUITE)' $(TESTSUITEFLAGS) ||:
+@HAVE_FAKECHROOT_TRUE@check-local: $(check_DATA)
+@HAVE_FAKECHROOT_TRUE@	$(SHELL) '$(TESTSUITE)' $(TESTSUITEFLAGS) ||:
+@HAVE_FAKECHROOT_FALSE@check-local:
+@HAVE_FAKECHROOT_FALSE@	echo "you need to have fakechroot installed"
+@HAVE_FAKECHROOT_FALSE@	exit 1
 
 installcheck-local: $(check_DATA)
 	$(SHELL) '$(TESTSUITE)' AUTOTEST_PATH='$(bindir)' \

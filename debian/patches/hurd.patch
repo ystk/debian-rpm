@@ -1,17 +1,6 @@
 From: Michal Čihař <nijel@debian.org>
 Subject: Add hurd support
 Forwarded: http://rpm.org/ticket/170
---- a/Makefile.am
-+++ b/Makefile.am
-@@ -192,7 +192,7 @@
- 
- install-data-local:
- 	@case "@host_os@" in \
--	solaris*|linux*|darwin*|kfreebsd*) \
-+	solaris*|linux*|darwin*|kfreebsd*|gnu*) \
- 	   DESTDIR="$(DESTDIR)" pkglibdir="$(rpmconfigdir)" $(SHELL) $(top_srcdir)/installplatform rpmrc macros platform ;; \
- 	esac
- 	@$(MKDIR_P) $(DESTDIR)$(localstatedir)/tmp
 --- /dev/null
 +++ b/autodeps/gnu.prov
 @@ -0,0 +1,61 @@

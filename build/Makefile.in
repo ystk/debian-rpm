@@ -77,29 +77,47 @@ am__base_list = \
 am__installdirs = "$(DESTDIR)$(usrlibdir)"
 LTLIBRARIES = $(usrlib_LTLIBRARIES)
 librpmbuild_la_DEPENDENCIES = $(top_builddir)/lib/librpm.la \
-	$(top_builddir)/rpmio/librpmio.la
+	$(top_builddir)/rpmio/librpmio.la \
+	$(top_builddir)/misc/libmisc.la
 am_librpmbuild_la_OBJECTS = build.lo expression.lo files.lo misc.lo \
-	names.lo pack.lo parseBuildInstallClean.lo parseChangelog.lo \
+	pack.lo parseBuildInstallClean.lo parseChangelog.lo \
 	parseDescription.lo parseFiles.lo parsePreamble.lo \
 	parsePrep.lo parseReqs.lo parseScript.lo parseSpec.lo \
-	poptBT.lo reqprov.lo rpmfc.lo spec.lo
+	reqprov.lo rpmfc.lo spec.lo parsePolicies.lo policies.lo
 librpmbuild_la_OBJECTS = $(am_librpmbuild_la_OBJECTS)
-librpmbuild_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
-	$(librpmbuild_la_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_lt = $(am__v_lt_$(V))
+am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
+am__v_lt_0 = --silent
+librpmbuild_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(AM_CFLAGS) $(CFLAGS) $(librpmbuild_la_LDFLAGS) $(LDFLAGS) -o \
+	$@
 DEFAULT_INCLUDES = 
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
-LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
-	--mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LTCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) \
+	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+	$(AM_CFLAGS) $(CFLAGS)
+AM_V_CC = $(am__v_CC_$(V))
+am__v_CC_ = $(am__v_CC_$(AM_DEFAULT_VERBOSITY))
+am__v_CC_0 = @echo "  CC    " $@;
+AM_V_at = $(am__v_at_$(V))
+am__v_at_ = $(am__v_at_$(AM_DEFAULT_VERBOSITY))
+am__v_at_0 = @
 CCLD = $(CC)
-LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
-	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -o $@
+LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_CCLD = $(am__v_CCLD_$(V))
+am__v_CCLD_ = $(am__v_CCLD_$(AM_DEFAULT_VERBOSITY))
+am__v_CCLD_0 = @echo "  CCLD  " $@;
+AM_V_GEN = $(am__v_GEN_$(V))
+am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
+am__v_GEN_0 = @echo "  GEN   " $@;
 SOURCES = $(librpmbuild_la_SOURCES)
 DIST_SOURCES = $(librpmbuild_la_SOURCES)
 ETAGS = etags
@@ -107,6 +125,7 @@ CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
+AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
 AS = @AS@
 AUTOCONF = @AUTOCONF@
@@ -126,6 +145,7 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DOXYGEN = @DOXYGEN@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -159,7 +179,10 @@ LN_S = @LN_S@
 LTLIBICONV = @LTLIBICONV@
 LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
+LUA_CFLAGS = @LUA_CFLAGS@
+LUA_LIBS = @LUA_LIBS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MSGFMT = @MSGFMT@
 MSGFMT_015 = @MSGFMT_015@
@@ -178,6 +201,9 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
 PYTHON = @PYTHON@
 PYTHON_EXEC_PREFIX = @PYTHON_EXEC_PREFIX@
@@ -185,14 +211,10 @@ PYTHON_PLATFORM = @PYTHON_PLATFORM@
 PYTHON_PREFIX = @PYTHON_PREFIX@
 PYTHON_VERSION = @PYTHON_VERSION@
 RANLIB = @RANLIB@
-RPMCANONARCH = @RPMCANONARCH@
-RPMCANONCOLOR = @RPMCANONCOLOR@
 RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
-RPM_MKDIR = @RPM_MKDIR@
-RPM_MKDIR_P = @RPM_MKDIR_P@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -203,10 +225,7 @@ WITH_ACL_LIB = @WITH_ACL_LIB@
 WITH_BZ2_LIB = @WITH_BZ2_LIB@
 WITH_CAP_LIB = @WITH_CAP_LIB@
 WITH_DB_LIB = @WITH_DB_LIB@
-WITH_LIBELF_INCLUDE = @WITH_LIBELF_INCLUDE@
 WITH_LIBELF_LIB = @WITH_LIBELF_LIB@
-WITH_LUA_INCLUDE = @WITH_LUA_INCLUDE@
-WITH_LUA_LIB = @WITH_LUA_LIB@
 WITH_LZMA_LIB = @WITH_LZMA_LIB@
 WITH_MAGIC_INCLUDE = @WITH_MAGIC_INCLUDE@
 WITH_MAGIC_LIB = @WITH_MAGIC_LIB@
@@ -217,22 +236,20 @@ WITH_POPT_LIB = @WITH_POPT_LIB@
 WITH_PYTHON_INCLUDE = @WITH_PYTHON_INCLUDE@
 WITH_PYTHON_LIB = @WITH_PYTHON_LIB@
 WITH_SELINUX_LIB = @WITH_SELINUX_LIB@
-WITH_SQLITE3_INCLUDE = @WITH_SQLITE3_INCLUDE@
-WITH_SQLITE3_LIB = @WITH_SQLITE3_LIB@
+WITH_SEMANAGE_LIB = @WITH_SEMANAGE_LIB@
 WITH_ZLIB_INCLUDE = @WITH_ZLIB_INCLUDE@
 WITH_ZLIB_LIB = @WITH_ZLIB_LIB@
 XGETTEXT = @XGETTEXT@
 XGETTEXT_015 = @XGETTEXT_015@
 YACC = @YACC@
 YFLAGS = @YFLAGS@
+__7ZIP = @__7ZIP@
 __BZIP2 = @__BZIP2@
 __CAT = @__CAT@
 __CC = @__CC@
 __CHGRP = @__CHGRP@
-__CHGRP_RHF = @__CHGRP_RHF@
 __CHMOD = @__CHMOD@
 __CHOWN = @__CHOWN@
-__CHOWN_RHF = @__CHOWN_RHF@
 __CP = @__CP@
 __CPIO = @__CPIO@
 __CURL = @__CURL@
@@ -242,11 +259,13 @@ __GPG = @__GPG@
 __GREP = @__GREP@
 __GZIP = @__GZIP@
 __ID = @__ID@
-__ID_U = @__ID_U@
 __INSTALL = @__INSTALL@
 __LD = @__LD@
+__LRZIP = @__LRZIP@
+__LZIP = @__LZIP@
 __MAKE = @__MAKE@
 __MKDIR = @__MKDIR@
+__MKDIR_P = @__MKDIR_P@
 __MV = @__MV@
 __NM = @__NM@
 __OBJCOPY = @__OBJCOPY@
@@ -255,9 +274,11 @@ __PATCH = @__PATCH@
 __PERL = @__PERL@
 __PGP = @__PGP@
 __PYTHON = @__PYTHON@
+__RESTORECON = @__RESTORECON@
 __RM = @__RM@
 __RSH = @__RSH@
 __SED = @__SED@
+__SEMODULE = @__SEMODULE@
 __SSH = @__SSH@
 __STRIP = @__STRIP@
 __TAR = @__TAR@
@@ -267,6 +288,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
@@ -301,7 +323,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -324,22 +345,23 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_builddir) -I$(top_srcdir) \
 	-I$(top_builddir)/include/ @WITH_NSS_INCLUDE@ \
-	@WITH_MAGIC_INCLUDE@ @WITH_POPT_INCLUDE@ @WITH_LIBELF_INCLUDE@ \
-	-I$(top_srcdir)/misc
+	@WITH_MAGIC_INCLUDE@ @WITH_POPT_INCLUDE@ -I$(top_srcdir)/misc
 usrlibdir = $(libdir)
 usrlib_LTLIBRARIES = librpmbuild.la
 librpmbuild_la_SOURCES = \
-	build.c buildio.h expression.c files.c misc.c names.c pack.c \
+	build.c expression.c files.c misc.c pack.c \
 	parseBuildInstallClean.c parseChangelog.c parseDescription.c \
 	parseFiles.c parsePreamble.c parsePrep.c parseReqs.c parseScript.c \
-	parseSpec.c poptBT.c reqprov.c rpmfc.c spec.c
+	parseSpec.c reqprov.c rpmfc.c spec.c \
+	parsePolicies.c policies.c \
+	rpmbuild_internal.h rpmbuild_misc.h
 
-librpmbuild_la_LDFLAGS = -version-info 1:0:0
+librpmbuild_la_LDFLAGS = -version-info 3:0:0
 librpmbuild_la_LIBADD = \
 	$(top_builddir)/lib/librpm.la \
 	$(top_builddir)/rpmio/librpmio.la \
+	$(top_builddir)/misc/libmisc.la \
 	@WITH_POPT_LIB@ \
-	@WITH_LIBELF_LIB@ \
 	@WITH_MAGIC_LIB@
 
 all: all-am
@@ -408,7 +430,7 @@ clean-usrlibLTLIBRARIES:
 	  rm -f "$${dir}/so_locations"; \
 	done
 librpmbuild.la: $(librpmbuild_la_OBJECTS) $(librpmbuild_la_DEPENDENCIES) 
-	$(librpmbuild_la_LINK) -rpath $(usrlibdir) $(librpmbuild_la_OBJECTS) $(librpmbuild_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(librpmbuild_la_LINK) -rpath $(usrlibdir) $(librpmbuild_la_OBJECTS) $(librpmbuild_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -420,42 +442,45 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/expression.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/files.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/misc.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/names.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pack.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseBuildInstallClean.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseChangelog.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseDescription.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseFiles.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parsePolicies.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parsePreamble.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parsePrep.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseReqs.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseScript.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parseSpec.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/poptBT.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/policies.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/reqprov.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmfc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/spec.Plo@am__quote@
 
 .c.o:
-@am__fastdepCC_TRUE@	depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
 @am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(COMPILE) -c -o $@ $<
 
 .c.obj:
-@am__fastdepCC_TRUE@	depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ `$(CYGPATH_W) '$<'` &&\
 @am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
 .c.lo:
-@am__fastdepCC_TRUE@	depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
 @am__fastdepCC_TRUE@	$(LTCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
 @am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Plo
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<

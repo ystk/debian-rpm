@@ -6,7 +6,7 @@ rpm packages on Debian.
 
 --- a/macros.in
 +++ b/macros.in
-@@ -155,7 +155,7 @@
+@@ -161,7 +161,7 @@
  %_bzip2bin		%{__bzip2}
  
  #	The location of the rpm database file(s).

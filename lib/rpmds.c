@@ -25,10 +25,9 @@ struct rpmds_s {
     const char ** EVR;		/*!< Epoch-Version-Release. */
     rpmsenseFlags * Flags;	/*!< Bit(s) identifying context/comparison. */
     rpm_color_t * Color;	/*!< Bit(s) calculated from file color(s). */
-    int32_t * Refs;		/*!< No. of file refs. */
-    time_t BT;			/*!< Package build time tie breaker. */
-    rpmTag tagN;		/*!< Header tag. */
+    rpmTagVal tagN;		/*!< Header tag. */
     int32_t Count;		/*!< No. of elements */
+    unsigned int instance;	/*!< From rpmdb instance? */
     int i;			/*!< Element index. */
     unsigned l;			/*!< Low element (bsearch). */
     unsigned u;			/*!< High element (bsearch). */
@@ -38,13 +37,13 @@ struct rpmds_s {
 
 static const char ** rpmdsDupArgv(const char ** argv, int argc);
 
-static int dsType(rpmTag tag, 
-		  const char ** Type, rpmTag * tagEVR, rpmTag * tagF)
+static int dsType(rpmTagVal tag, 
+		  const char ** Type, rpmTagVal * tagEVR, rpmTagVal * tagF)
 {
     int rc = 0;
     const char *t = NULL;
-    rpmTag evr = RPMTAG_NOT_FOUND;
-    rpmTag f = RPMTAG_NOT_FOUND;
+    rpmTagVal evr = RPMTAG_NOT_FOUND;
+    rpmTagVal f = RPMTAG_NOT_FOUND;
 
     if (tag == RPMTAG_PROVIDENAME) {
 	t = "Provides";
@@ -62,6 +61,10 @@ static int dsType(rpmTag tag,
 	t = "Obsoletes";
 	evr = RPMTAG_OBSOLETEVERSION;
 	f = RPMTAG_OBSOLETEFLAGS;
+    } else if (tag == RPMTAG_ORDERNAME) {
+	t = "Order";
+	evr = RPMTAG_ORDERVERSION;
+	f = RPMTAG_ORDERFLAGS;
     } else if (tag == RPMTAG_TRIGGERNAME) {
 	t = "Trigger";
 	evr = RPMTAG_TRIGGERVERSION;
@@ -75,38 +78,29 @@ static int dsType(rpmTag tag,
     return rc;
 }    
 
-rpmds rpmdsUnlink(rpmds ds, const char * msg)
+static rpmds rpmdsUnlink(rpmds ds)
 {
-    if (ds == NULL) return NULL;
-if (_rpmds_debug && msg != NULL)
-fprintf(stderr, "--> ds %p -- %d %s\n", ds, ds->nrefs, msg);
-    ds->nrefs--;
+    if (ds)
+	ds->nrefs--;
     return NULL;
 }
 
-rpmds rpmdsLink(rpmds ds, const char * msg)
+rpmds rpmdsLink(rpmds ds)
 {
-    if (ds == NULL) return NULL;
-    ds->nrefs++;
-
-if (_rpmds_debug && msg != NULL)
-fprintf(stderr, "--> ds %p ++ %d %s\n", ds, ds->nrefs, msg);
-
+    if (ds)
+	ds->nrefs++;
     return ds;
 }
 
 rpmds rpmdsFree(rpmds ds)
 {
-    rpmTag tagEVR, tagF;
+    rpmTagVal tagEVR, tagF;
 
     if (ds == NULL)
 	return NULL;
 
     if (ds->nrefs > 1)
-	return rpmdsUnlink(ds, ds->Type);
-
-if (_rpmds_debug < 0)
-fprintf(stderr, "*** ds %p\t%s[%d]\n", ds, ds->Type, ds->Count);
+	return rpmdsUnlink(ds);
 
     if (dsType(ds->tagN, NULL, &tagEVR, &tagF))
 	return NULL;
@@ -119,17 +113,16 @@ fprintf(stderr, "*** ds %p\t%s[%d]\n", ds, ds->Type, ds->Count);
 
     ds->DNEVR = _free(ds->DNEVR);
     ds->Color = _free(ds->Color);
-    ds->Refs = _free(ds->Refs);
 
-    (void) rpmdsUnlink(ds, ds->Type);
+    (void) rpmdsUnlink(ds);
     memset(ds, 0, sizeof(*ds));		/* XXX trash and burn */
     ds = _free(ds);
     return NULL;
 }
 
-rpmds rpmdsNew(Header h, rpmTag tagN, int flags)
+rpmds rpmdsNew(Header h, rpmTagVal tagN, int flags)
 {
-    rpmTag tagEVR, tagF;
+    rpmTagVal tagEVR, tagF;
     rpmds ds = NULL;
     const char * Type;
     struct rpmtd_s names;
@@ -149,6 +142,7 @@ rpmds rpmdsNew(Header h, rpmTag tagN, int flags)
 	ds->N = names.data;
 	ds->Count = rpmtdCount(&names);
 	ds->nopromote = _rpmds_nopromote;
+	ds->instance = headerGetInstance(h);
 
 	headerGet(h, tagEVR, &evr, hgflags);
 	ds->EVR = evr.data;
@@ -163,13 +157,7 @@ rpmds rpmdsNew(Header h, rpmTag tagN, int flags)
 	    }
 	}
 
-	ds->BT = headerGetNumber(h, RPMTAG_BUILDTIME);
-	ds->Color = xcalloc(ds->Count, sizeof(*ds->Color));
-	ds->Refs = xcalloc(ds->Count, sizeof(*ds->Refs));
-	ds = rpmdsLink(ds, ds->Type);
-
-if (_rpmds_debug < 0)
-fprintf(stderr, "*** ds %p\t%s[%d]\n", ds, ds->Type, ds->Count);
+	ds = rpmdsLink(ds);
     }
 
 exit:
@@ -220,15 +208,9 @@ char * rpmdsNewDNEVR(const char * dspfx, const rpmds ds)
     return tbuf;
 }
 
-rpmds rpmdsThis(Header h, rpmTag tagN, rpmsenseFlags Flags)
-{
-    char *evr = headerGetAsString(h, RPMTAG_EVR);
-    rpmds ds = rpmdsSingle(tagN, headerGetString(h, RPMTAG_NAME), evr, Flags);
-    free(evr);
-    return ds;
-}
-
-rpmds rpmdsSingle(rpmTag tagN, const char * N, const char * EVR, rpmsenseFlags Flags)
+static rpmds singleDS(rpmTagVal tagN, const char * N, const char * EVR,
+		      rpmsenseFlags Flags, unsigned int instance,
+		      rpm_color_t Color)
 {
     rpmds ds = NULL;
     const char * Type;
@@ -239,11 +221,9 @@ rpmds rpmdsSingle(rpmTag tagN, const char * N, const char * EVR, rpmsenseFlags F
     ds = xcalloc(1, sizeof(*ds));
     ds->Type = Type;
     ds->tagN = tagN;
-    {	time_t now = time(NULL);
-	ds->BT = now;
-    }
     ds->Count = 1;
     ds->nopromote = _rpmds_nopromote;
+    ds->instance = instance;
 
     ds->N = rpmdsDupArgv(&N, 1);
     ds->EVR = rpmdsDupArgv(&EVR, 1);
@@ -251,9 +231,35 @@ rpmds rpmdsSingle(rpmTag tagN, const char * N, const char * EVR, rpmsenseFlags F
     ds->Flags = xmalloc(sizeof(*ds->Flags));
     ds->Flags[0] = Flags;
     ds->i = 0;
+    if (Color)
+	rpmdsSetColor(ds, Color);
 
 exit:
-    return rpmdsLink(ds, (ds ? ds->Type : NULL));
+    return rpmdsLink(ds);
+}
+
+rpmds rpmdsThis(Header h, rpmTagVal tagN, rpmsenseFlags Flags)
+{
+    char *evr = headerGetAsString(h, RPMTAG_EVR);
+    rpmds ds = singleDS(tagN, headerGetString(h, RPMTAG_NAME),
+			evr, Flags, headerGetInstance(h), 0);
+    free(evr);
+    return ds;
+}
+
+rpmds rpmdsSingle(rpmTagVal tagN, const char * N, const char * EVR, rpmsenseFlags Flags)
+{
+    return singleDS(tagN, N, EVR, Flags, 0, 0);
+}
+
+rpmds rpmdsCurrent(rpmds ds)
+{
+    rpmds cds = NULL;
+    if (ds != NULL && ds->i >= 0 && ds->i < ds->Count) {
+	cds = singleDS(ds->tagN, ds->N[ds->i], ds->EVR[ds->i],
+		       ds->Flags[ds->i], ds->instance, rpmdsColor(ds));
+    }
+    return cds;
 }
 
 int rpmdsCount(const rpmds ds)
@@ -325,31 +331,18 @@ rpmsenseFlags rpmdsFlags(const rpmds ds)
     return Flags;
 }
 
-rpmTag rpmdsTagN(const rpmds ds)
+rpmTagVal rpmdsTagN(const rpmds ds)
 {
-    rpmTag tagN = 0;
+    rpmTagVal tagN = RPMTAG_NOT_FOUND;
 
     if (ds != NULL)
 	tagN = ds->tagN;
     return tagN;
 }
 
-time_t rpmdsBT(const rpmds ds)
+unsigned int rpmdsInstance(rpmds ds)
 {
-    time_t BT = 0;
-    if (ds != NULL && ds->BT > 0)
-	BT = ds->BT;
-    return BT;
-}
-
-time_t rpmdsSetBT(const rpmds ds, time_t BT)
-{
-    time_t oBT = 0;
-    if (ds != NULL) {
-	oBT = ds->BT;
-	ds->BT = BT;
-    }
-    return oBT;
+    return (ds != NULL) ? ds->instance : 0;
 }
 
 int rpmdsNoPromote(const rpmds ds)
@@ -388,36 +381,13 @@ rpm_color_t rpmdsSetColor(const rpmds ds, rpm_color_t color)
     rpm_color_t ocolor = 0;
 
     if (ds != NULL && ds->i >= 0 && ds->i < ds->Count) {
-	if (ds->Color != NULL) {
-	    ocolor = ds->Color[ds->i];
-	    ds->Color[ds->i] = color;
+	if (ds->Color == NULL) {
+	    ds->Color = xcalloc(ds->Count, sizeof(*ds->Color));
 	}
+	ocolor = ds->Color[ds->i];
+	ds->Color[ds->i] = color;
     }
     return ocolor;
-}
-
-int32_t rpmdsRefs(const rpmds ds)
-{
-    int32_t Refs = 0;
-
-    if (ds != NULL && ds->i >= 0 && ds->i < ds->Count) {
-	if (ds->Refs != NULL)
-	    Refs = ds->Refs[ds->i];
-    }
-    return Refs;
-}
-
-int32_t rpmdsSetRefs(const rpmds ds, int32_t refs)
-{
-    int32_t orefs = 0;
-
-    if (ds != NULL && ds->i >= 0 && ds->i < ds->Count) {
-	if (ds->Refs != NULL) {
-	    orefs = ds->Refs[ds->i];
-	    ds->Refs[ds->i] = refs;
-	}
-    }
-    return orefs;
 }
 
 void rpmdsNotify(rpmds ds, const char * where, int rc)
@@ -514,8 +484,7 @@ assert(ods->Flags != NULL);
     nb = (ds->Count * sizeof(*ds->Flags));
     ds->Flags = memcpy(xmalloc(nb), ods->Flags, nb);
 
-/* FIX: ds->Flags is kept, not only */
-    return rpmdsLink(ds, (ds ? ds->Type : NULL));
+    return rpmdsLink(ds);
 
 }
 
@@ -774,8 +743,20 @@ int rpmdsCompare(const rpmds A, const rpmds B)
 
     if (sense == 0) {
 	sense = rpmvercmp(aV, bV);
-	if (sense == 0 && aR && *aR && bR && *bR)
-	    sense = rpmvercmp(aR, bR);
+	if (sense == 0) {
+	    if (aR && *aR && bR && *bR) {
+		sense = rpmvercmp(aR, bR);
+	    } else {
+		/* always matches if the side with no release has SENSE_EQUAL */
+		if ((aR && *aR && (B->Flags[B->i] & RPMSENSE_EQUAL)) ||
+		    (bR && *bR && (A->Flags[A->i] & RPMSENSE_EQUAL))) {
+		    aEVR = _free(aEVR);
+		    bEVR = _free(bEVR);
+		    result = 1;
+		    goto exit;
+		}
+	    }
+	}
     }
     aEVR = _free(aEVR);
     bEVR = _free(bEVR);
@@ -797,30 +778,17 @@ exit:
     return result;
 }
 
-void rpmdsProblem(rpmps ps, const char * pkgNEVR, const rpmds ds,
-	const fnpyKey * suggestedKeys, int adding)
+int rpmdsMatchesDep (const Header h, int ix, const rpmds req, int nopromote)
 {
-    const char * DNEVR = rpmdsDNEVR(ds);
-    const char * EVR = rpmdsEVR(ds);
-    rpmProblemType type;
-    fnpyKey key;
+    /* Get provides information from header */
+    rpmds provides = rpmdsInit(rpmdsNew(h, RPMTAG_PROVIDENAME, 0));
+    int result = 0;
 
-    if (ps == NULL) return;
+    rpmdsSetIx(provides,ix);
+    result = rpmdsCompare(provides, req);
 
-    if (EVR == NULL) EVR = "?EVR?";
-    if (DNEVR == NULL) DNEVR = "? ?N? ?OP? ?EVR?";
-
-    rpmlog(RPMLOG_DEBUG, "package %s has unsatisfied %s: %s\n",
-	    pkgNEVR, ds->Type, DNEVR+2);
-
-    switch ((unsigned)DNEVR[0]) {
-    case 'C':	type = RPMPROB_CONFLICT;	break;
-    default:
-    case 'R':	type = RPMPROB_REQUIRES;	break;
-    }
-
-    key = (suggestedKeys ? suggestedKeys[0] : NULL);
-    rpmpsAppend(ps, type, pkgNEVR, key, NULL, NULL, DNEVR, adding);
+    rpmdsFree(provides);
+    return result;
 }
 
 int rpmdsAnyMatchesDep (const Header h, const rpmds req, int nopromote)
@@ -828,37 +796,14 @@ int rpmdsAnyMatchesDep (const Header h, const rpmds req, int nopromote)
     rpmds provides = NULL;
     int result = 0;
 
-    /* XXX rpm prior to 3.0.2 did not always supply EVR and Flags. */
-    if (req->EVR == NULL || req->Flags == NULL)
-	return 1;
-
-    if (!(req->Flags[req->i] & RPMSENSE_SENSEMASK) || !req->EVR[req->i] || *req->EVR[req->i] == '\0')
-	return 1;
-
     /* Get provides information from header */
     provides = rpmdsInit(rpmdsNew(h, RPMTAG_PROVIDENAME, 0));
     if (provides == NULL)
 	goto exit;	/* XXX should never happen */
-    if (nopromote)
-	(void) rpmdsSetNoPromote(provides, nopromote);
 
-    /*
-     * Rpm prior to 3.0.3 did not have versioned provides.
-     * If no provides version info is available, match any/all requires
-     * with same name.
-     */
-    if (provides->EVR == NULL) {
-	result = 1;
-	goto exit;
-    }
+    (void) rpmdsSetNoPromote(provides, nopromote);
 
-    result = 0;
-    if (provides != NULL)
     while (rpmdsNext(provides) >= 0) {
-
-	/* Filter out provides that came along for the ride. */
-	if (!rstreq(provides->N[provides->i], req->N[req->i]))
-	    continue;
 
 	result = rpmdsCompare(provides, req);
 
@@ -868,36 +813,21 @@ int rpmdsAnyMatchesDep (const Header h, const rpmds req, int nopromote)
     }
 
 exit:
-    provides = rpmdsFree(provides);
+    rpmdsFree(provides);
 
     return result;
 }
 
 int rpmdsNVRMatchesDep(const Header h, const rpmds req, int nopromote)
 {
-    const char * pkgN;
-    char * pkgEVR;
-    rpmsenseFlags pkgFlags = RPMSENSE_EQUAL;
     rpmds pkg;
     int rc = 1;	/* XXX assume match, names already match here */
 
-    /* XXX rpm prior to 3.0.2 did not always supply EVR and Flags. */
-    if (req->EVR == NULL || req->Flags == NULL)
-	return rc;
-
-    if (!((req->Flags[req->i] & RPMSENSE_SENSEMASK) && req->EVR[req->i] && *req->EVR[req->i]))
-	return rc;
-
     /* Get package information from header */
-    pkgN = headerGetString(h, RPMTAG_NAME);
-    pkgEVR = headerGetAsString(h, RPMTAG_EVR);
-    if ((pkg = rpmdsSingle(RPMTAG_PROVIDENAME, pkgN, pkgEVR, pkgFlags)) != NULL) {
-	if (nopromote)
-	    (void) rpmdsSetNoPromote(pkg, nopromote);
-	rc = rpmdsCompare(pkg, req);
-	pkg = rpmdsFree(pkg);
-    }
-    free(pkgEVR);
+    pkg = rpmdsThis(h, RPMTAG_PROVIDENAME, RPMSENSE_EQUAL);
+    rpmdsSetNoPromote(pkg, nopromote);
+    rc = rpmdsCompare(pkg, req);
+    rpmdsFree(pkg);
 
     return rc;
 }
@@ -962,25 +892,31 @@ static const struct rpmlibProvides_s rpmlibProvides[] = {
 	(		 RPMSENSE_EQUAL),
     N_("support for POSIX.1e file capabilities") },
 #endif
+    { "rpmlib(ScriptletExpansion)",    "4.9.0-1",
+	(		RPMSENSE_EQUAL),
+    N_("package scriptlets can be expanded at install time.") },
+    { "rpmlib(TildeInVersions)",    "4.10.0-1",
+	(		RPMSENSE_EQUAL),
+    N_("dependency comparison supports versions with tilde.") },
     { NULL,				NULL, 0,	NULL }
 };
 
 
-int rpmdsRpmlib(rpmds * dsp, void * tblp)
+int rpmdsRpmlib(rpmds * dsp, const void * tblp)
 {
     const struct rpmlibProvides_s * rltblp = tblp;
     const struct rpmlibProvides_s * rlp;
-    int xx;
+    int rc = 0;
 
     if (rltblp == NULL)
 	rltblp = rpmlibProvides;
 
-    for (rlp = rltblp; rlp->featureName != NULL; rlp++) {
+    for (rlp = rltblp; rlp->featureName != NULL && rc == 0; rlp++) {
 	rpmds ds = rpmdsSingle(RPMTAG_PROVIDENAME, rlp->featureName,
 			rlp->featureEVR, rlp->featureFlags);
-	xx = rpmdsMerge(dsp, ds);
-	ds = rpmdsFree(ds);
+	rc = rpmdsMerge(dsp, ds);
+	rpmdsFree(ds);
     }
-    return 0;
+    return rc;
 }
 

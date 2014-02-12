@@ -23,7 +23,10 @@ typedef enum rpmCompressedMagic_e {
     COMPRESSED_BZIP2		= 2,	/*!< bzip2 can handle */
     COMPRESSED_ZIP		= 3,	/*!< unzip can handle */
     COMPRESSED_LZMA		= 4,	/*!< lzma can handle */
-    COMPRESSED_XZ		= 5	/*!< xz can handle */
+    COMPRESSED_XZ		= 5,	/*!< xz can handle */
+    COMPRESSED_LZIP		= 6,	/*!< lzip can handle */
+    COMPRESSED_LRZIP		= 7,	/*!< lrzip can handle */
+    COMPRESSED_7ZIP		= 8	/*!< 7zip can handle */
 } rpmCompressedMagic;
 
 /** \ingroup rpmfileutil
@@ -35,7 +38,7 @@ typedef enum rpmCompressedMagic_e {
  * @retval *fsizep	file size pointer (or NULL)
  * @return		0 on success, 1 on error
  */
-int rpmDoDigest(pgpHashAlgo algo, const char * fn,int asAscii,
+int rpmDoDigest(int algo, const char * fn,int asAscii,
 		  unsigned char * digest, rpm_loff_t * fsizep);
 
 /** \ingroup rpmfileutil

@@ -7,28 +7,19 @@ Author: Michal Čihař <nijel@debian.org>
 Forwarded: http://rpm.org/ticket/79
 --- a/configure.ac
 +++ b/configure.ac
-@@ -697,6 +697,8 @@
+@@ -537,6 +537,8 @@
  
- AM_CONDITIONAL(PYTHON,[test "$WITH_PYTHON_SUBPACKAGE" = 1])
+ AM_CONDITIONAL(ENABLE_PYTHON,[test "$WITH_PYTHON_SUBPACKAGE" = 1])
  
 +AC_ARG_WITH(debian, [  --with-debian		build rpm for usage on Debian],[AC_DEFINE(ON_DEBIAN, 1, [Define as 1 if you do not want to use rpm for installing packages])])
 +
  AC_PATH_PROG(DOXYGEN, doxygen, no)
  dnl
  dnl Only build internal API + source hacking docs on request
-@@ -983,7 +985,7 @@
- esac
- RPMCANONVENDOR="$build_vendor"
- case "${build_vendor}" in
--unknown|pc|ibm|redhat|pld|mandrake|conectiva|lvr|yellowdog|caos|suse)
-+unknown|pc|ibm|redhat|pld|mandrake|conectiva|lvr|yellowdog|caos|suse|debian)
- 	test -f /etc/redhat-release &&		RPMCANONVENDOR=redhat
- 	test -f /etc/SuSE-release &&		RPMCANONVENDOR=suse
- 	test -f /etc/pld-release &&		RPMCANONVENDOR=pld
 --- a/lib/poptI.c
 +++ b/lib/poptI.c
-@@ -166,6 +166,11 @@
- 	N_("detect file conflicts between packages"), NULL},
+@@ -141,6 +141,11 @@
+ 
   { "force", '\0', 0, NULL, RPMCLI_POPT_FORCE,
  	N_("short hand for --replacepkgs --replacefiles"), NULL},
 +#if defined(ON_DEBIAN)
@@ -39,22 +30,10 @@ Forwarded: http://rpm.org/ticket/79
  
   { "freshen", 'F', POPT_BIT_SET, &rpmIArgs.installInterfaceFlags,
  	(INSTALL_UPGRADE|INSTALL_FRESHEN|INSTALL_INSTALL),
---- a/lib/rpmps.h
-+++ b/lib/rpmps.h
-@@ -28,7 +28,8 @@
-     RPMPROB_FILTER_REPLACEOLDFILES= (1 << 5),	/*!< from --replacefiles */
-     RPMPROB_FILTER_OLDPACKAGE	= (1 << 6),	/*!< from --oldpackage */
-     RPMPROB_FILTER_DISKSPACE	= (1 << 7),	/*!< from --ignoresize */
--    RPMPROB_FILTER_DISKNODES	= (1 << 8)	/*!< from --ignoresize */
-+    RPMPROB_FILTER_DISKNODES	= (1 << 8),	/*!< from --ignoresize */
-+    RPMPROB_FILTER_DEBIAN	= (1 << 9)	/*!< from --force-debian */
- } rpmprobFilterFlags;
- 
- /**
 --- a/rpmqv.c
 +++ b/rpmqv.c
-@@ -391,6 +391,14 @@
- #endif	/* IAM_RPMK */
+@@ -148,6 +148,14 @@
+ #endif	/* IAM_RPMEIU */
  
  #if defined(IAM_RPMEIU)
 +#if defined(ON_DEBIAN)
@@ -67,4 +46,16 @@ Forwarded: http://rpm.org/ticket/79
 +
      if (!( bigMode == MODE_INSTALL ) &&
  (ia->probFilter & (RPMPROB_FILTER_REPLACEPKG | RPMPROB_FILTER_OLDPACKAGE)))
- 	argerror(_("only installation, upgrading, rmsource and rmspec may be forced"));
+ 	argerror(_("only installation and upgrading may be forced"));
+--- a/lib/rpmprob.h
++++ b/lib/rpmprob.h
+@@ -28,7 +28,8 @@
+     RPMPROB_FILTER_REPLACEOLDFILES= (1 << 5),	/*!< from --replacefiles */
+     RPMPROB_FILTER_OLDPACKAGE	= (1 << 6),	/*!< from --oldpackage */
+     RPMPROB_FILTER_DISKSPACE	= (1 << 7),	/*!< from --ignoresize */
+-    RPMPROB_FILTER_DISKNODES	= (1 << 8)	/*!< from --ignoresize */
++    RPMPROB_FILTER_DISKNODES	= (1 << 8),	/*!< from --ignoresize */
++    RPMPROB_FILTER_DEBIAN	= (1 << 9)	/*!< from --force-debian */
+ };
+ 
+ typedef rpmFlags rpmprobFilterFlags;

@@ -204,14 +204,3 @@ Forwarded: http://rpm.org/ticket/170
 +    echo $tcllist | tr '[:blank:]' \\n | /usr/lib/rpm/tcl.req | sort -u
 +
 +exit 0
---- a/Makefile.am
-+++ b/Makefile.am
-@@ -192,7 +192,7 @@
- 
- install-data-local:
- 	@case "@host_os@" in \
--	solaris*|linux*|darwin*) \
-+	solaris*|linux*|darwin*|kfreebsd*) \
- 	   DESTDIR="$(DESTDIR)" pkglibdir="$(rpmconfigdir)" $(SHELL) $(top_srcdir)/installplatform rpmrc macros platform ;; \
- 	esac
- 	@$(MKDIR_P) $(DESTDIR)$(localstatedir)/tmp

@@ -32,9 +32,18 @@ int rpmvercmp(const char * a, const char * b)
     two = str2;
 
     /* loop through each version segment of str1 and str2 and compare them */
-    while (*one && *two) {
-	while (*one && !risalnum(*one)) one++;
-	while (*two && !risalnum(*two)) two++;
+    while (*one || *two) {
+	while (*one && !risalnum(*one) && *one != '~') one++;
+	while (*two && !risalnum(*two) && *two != '~') two++;
+
+	/* handle the tilde separator, it sorts before everthing else */
+	if (*one == '~' || *two == '~') {
+	    if (*one != '~') return 1;
+	    if (*two != '~') return -1;
+	    one++;
+	    two++;
+	    continue;
+	}
 
 	/* If we ran to the end of either, we are finished with the loop */
 	if (!(*one && *two)) break;
@@ -107,4 +116,25 @@ int rpmvercmp(const char * a, const char * b)
 
     /* whichever version still has characters left over wins */
     if (!*one) return -1; else return 1;
+}
+
+int rpmVersionCompare(Header first, Header second)
+{
+    /* Missing epoch becomes zero here, which is what we want */
+    uint32_t epochOne = headerGetNumber(first, RPMTAG_EPOCH);
+    uint32_t epochTwo = headerGetNumber(second, RPMTAG_EPOCH);
+    int rc;
+
+    if (epochOne < epochTwo)
+	return -1;
+    else if (epochOne > epochTwo)
+	return 1;
+
+    rc = rpmvercmp(headerGetString(first, RPMTAG_VERSION),
+		   headerGetString(second, RPMTAG_VERSION));
+    if (rc)
+	return rc;
+
+    return rpmvercmp(headerGetString(first, RPMTAG_RELEASE),
+		     headerGetString(second, RPMTAG_RELEASE));
 }

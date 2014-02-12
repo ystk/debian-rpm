@@ -1,0 +1,6 @@
+<map id="structs" name="structs">
+<area shape="rect" id="node2" href="$group__rpmcli.html" title="Command Line API." alt="" coords="198,5,338,32"/>
+<area shape="rect" id="node3" href="$group__rpmdb.html" title="Database API." alt="" coords="214,56,322,83"/>
+<area shape="rect" id="node4" href="$group__signature.html" title="Signature API." alt="" coords="215,107,321,133"/>
+<area shape="rect" id="node5" href="$group__rpmrc.html" title="RPMRC." alt="" coords="230,157,306,184"/>
+</map>

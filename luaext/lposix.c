@@ -5,6 +5,10 @@
 * 05 Nov 2003 22:09:10
 */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -22,6 +26,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <utime.h>
+#include <rpm/rpmutil.h>
 
 #define MYNAME		"posix"
 #define MYVERSION	MYNAME " library for " LUA_VERSION " / Nov 2003"
@@ -36,6 +41,8 @@
 #endif
 
 #include "modemuncher.c"
+
+static int have_forked = 0;
 
 static const char *filetype(mode_t m)
 {
@@ -318,7 +325,12 @@ static int Pexec(lua_State *L)			/** exec(path,[args]) */
 {
 	const char *path = luaL_checkstring(L, 1);
 	int i,n=lua_gettop(L);
-	char **argv = malloc((n+1)*sizeof(char*));
+	char **argv;
+
+	if (!have_forked)
+	    return luaL_error(L, "exec not permitted in this context");
+
+	argv = malloc((n+1)*sizeof(char*));
 	if (argv==NULL) return luaL_error(L,"not enough memory");
 	argv[0] = (char*)path;
 	for (i=1; i<n; i++) argv[i] = (char*)luaL_checkstring(L, i+1);
@@ -330,7 +342,11 @@ static int Pexec(lua_State *L)			/** exec(path,[args]) */
 
 static int Pfork(lua_State *L)			/** fork() */
 {
-	return pushresult(L, fork(), NULL);
+	pid_t pid = fork();
+	if (pid == 0) {
+	    have_forked = 1;
+	}
+	return pushresult(L, pid, NULL);
 }
 
 
@@ -359,10 +375,14 @@ static int Psleep(lua_State *L)			/** sleep(seconds) */
 
 static int Pputenv(lua_State *L)		/** putenv(string) */
 {
+#if HAVE_PUTENV
 	size_t l;
 	const char *s=luaL_checklstring(L, 1, &l);
 	char *e=malloc(++l);
 	return pushresult(L, (e==NULL) ? -1 : putenv(memcpy(e,s,l)), s);
+#else
+	return -1;
+#endif
 }
 
 
@@ -768,7 +788,7 @@ static int Pmkstemp(lua_State *L)
 	path = luaL_checkstring(L, 1);
 	if (path == NULL)
 		return 0;
-	dynpath = strdup(path);
+	dynpath = rstrdup(path);
 	fd = mkstemp(dynpath);
 	f = (FILE**)lua_newuserdata(L, sizeof(FILE*));
 	if (f == NULL) {
@@ -843,3 +863,27 @@ LUALIB_API int luaopen_posix (lua_State *L)
 	lua_settable(L,-3);
 	return 1;
 }
+
+/* RPM specific overrides for Lua standard library */
+
+static int exit_override(lua_State *L)
+{
+    if (!have_forked)
+	return luaL_error(L, "exit not permitted in this context");
+
+    exit(luaL_optint(L, 1, EXIT_SUCCESS));
+}
+
+static const luaL_reg os_overrides[] =
+{
+    {"exit",    exit_override},
+    {NULL,      NULL}
+};
+
+int luaopen_rpm_os(lua_State *L)
+{
+    lua_pushvalue(L, LUA_GLOBALSINDEX);
+    luaL_openlib(L, "os", os_overrides, 0);
+    return 0;
+}
+

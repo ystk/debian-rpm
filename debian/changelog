@@ -1,3 +1,157 @@
+rpm (4.10.0-5+deb7u1) testing-proposed-updates; urgency=low
+
+  * Non-maintainer upload.
+  * Add 0001-Ensure-correct-return-code-on-malformed-signature-in.patch
+    [SECURITY] CVE-2012-6088: Ensure correct return code on malformed
+    signature in packages. Patch cherry-picked from upstream git repository.
+    (Closes: #697375)
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Sat, 05 Jan 2013 13:11:49 +0100
+
+rpm (4.10.0-5) unstable; urgency=low
+
+  * Added patch from Fedora to support X-CheckUnifiedSystemdir 
+    (Closes: #683759).
+
+ -- Michal Čihař <nijel@debian.org>  Wed, 15 Aug 2012 09:05:26 +0200
+
+rpm (4.10.0-4) unstable; urgency=low
+
+  * Lower librpm -> rpm-common dependency to recommends as there actually
+    might be users of librpm which don't need all files in rpm-common. On the
+    other side rpm2cpio needs them, so add dependency there. This also fixes
+    circular dependency (Closes: #676186).
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 25 Jun 2012 14:29:12 +0200
+
+rpm (4.10.0-3) unstable; urgency=low
+
+  * Configure alternate python versions before default (Closes:
+    #678887).
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 25 Jun 2012 14:07:02 +0200
+
+rpm (4.10.0-2) unstable; urgency=low
+
+  * Move plugins to rpm-common package (Closes: #675517).
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 04 Jun 2012 09:10:28 +0200
+
+rpm (4.10.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * Bump soname in package versions.
+
+ -- Michal Čihař <nijel@debian.org>  Tue, 29 May 2012 13:26:18 +0200
+
+rpm (4.9.1.3-2) unstable; urgency=high
+
+  * Simplify debian/rules and make it work with curent debhelper.
+
+ -- Michal Čihař <nijel@debian.org>  Thu, 05 Apr 2012 13:32:46 +0200
+
+rpm (4.9.1.3-1) unstable; urgency=high
+
+  * New upstream release.
+    - Fixes CVE-2012-0815, CVE-2012-0060, CVE-2012-0061 (Closes: #667031).
+  * Update debian/copyright to match current format.
+  * Bump standards to 3.9.3.
+
+ -- Michal Čihař <nijel@debian.org>  Thu, 05 Apr 2012 09:34:05 +0200
+
+rpm (4.9.1.2-1) unstable; urgency=high
+
+  * New upstream release.
+    - Fixes CVE-2011-3378 (Closes: #645325).
+
+ -- Michal Čihař <nijel@debian.org>  Fri, 14 Oct 2011 17:53:46 +0200
+
+rpm (4.9.1.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * Rediff patches to match current code.
+  * Update symbols file.
+  * Do not list non linux archs in depends, use linux-any instead 
+    (Closes: #634373).
+  * Add s390x to symbols definition (Closes: #636519).
+  * Use dh-autoreconf instead of manually doing the same.
+  * Use autotools_dev dh sequence to update config.*.
+
+ -- Michal Čihař <nijel@debian.org>  Fri, 05 Aug 2011 11:54:06 +0200
+
+rpm (4.9.0-7) unstable; urgency=low
+
+  * Remove useless .la files from python-rpm (Closes: #633267).
+  * Avoid linking python module with libpython (LP: #789656).
+  * Remove empty lines from debian/*.symbols, they cause warnings during
+    build.
+
+ -- Michal Čihař <nijel@debian.org>  Tue, 12 Jul 2011 20:55:42 +0200
+
+rpm (4.9.0-6) unstable; urgency=low
+
+  * Add --fail-missing to debian/rules to catch non installed files.
+  * Include attributes definition files in rpm package (Closes: #630163).
+  * Include pkgconfig script in librpm-dev package.
+  * Include forgotten dependency generators in rpm package.
+  * Include rpm plugins in librpm2 package.
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 13 Jun 2011 11:01:44 +0200
+
+rpm (4.9.0-5) unstable; urgency=low
+
+  * Disable cap on non Linux arches in configure.
+
+ -- Michal Čihař <nijel@debian.org>  Sat, 21 May 2011 10:28:27 +0200
+
+rpm (4.9.0-4) unstable; urgency=low
+
+  * Depend on libcap onl on linux-any.
+  * Change linux only build deps to linux-any instead of listing others.
+
+ -- Michal Čihař <nijel@debian.org>  Sat, 21 May 2011 07:28:32 +0200
+
+rpm (4.9.0-3) unstable; urgency=low
+
+  * Build with file capability support (Closes: #625766).
+  * Bump standards to 3.9.2.
+  * Upload to unstable to bring libdb5.1 support there.
+
+ -- Michal Čihař <nijel@debian.org>  Fri, 20 May 2011 09:28:23 +0200
+
+rpm (4.9.0-2) experimental; urgency=low
+
+  * Fix symbols for 32-bit arches, fixes FTBFS.
+  * Build with --as-needed to minimize libraries deps.
+
+ -- Michal Čihař <nijel@debian.org>  Wed, 16 Mar 2011 15:07:46 +0100
+
+rpm (4.9.0-1) experimental; urgency=low
+
+  * New upstream version.
+    - Update, drop and cleanup applied patches.
+    - Works fine with db5.x (Closes: #618084).
+  * Target to experimental as we need libtool (>= 2.2.10).
+  * Drop lsb-rpm package. It seems that was broken for quite a long time
+    without anybody noticing.
+  * Use dh_auto_{configure,build,install} instead of own magic.
+  * Adjust package names to current libraries.
+    - Soname bump for all (librpmio, librpmbuild, librpm).
+    - Add librpmsign0 package.
+  * Drop not needed build dep on dpkg-dev.
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 14 Mar 2011 11:24:07 +0100
+
+rpm (4.8.1-7) unstable; urgency=low
+
+  * Bump standards to 3.9.1.
+  * Use Breaks instead of Conflicts when appropriate.
+  * Remove not needed conflicts/replace on rpm-common.
+  * Properly builds on ppc64 (Closes: #614226).
+  * Migrate to dh_python2.
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 21 Feb 2011 11:27:09 +0100
+
 rpm (4.8.1-6) unstable; urgency=low
 
   * Make librpm-dev conflict/replace librpm4.4 (Closes: #601993).

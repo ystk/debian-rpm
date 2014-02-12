@@ -3,27 +3,10 @@ Subject: Verbose installplatform
     Just make installplatform to ease debugging problems with creatin platform files.
 --- a/installplatform
 +++ b/installplatform
-@@ -12,6 +12,7 @@
- 
- canonarch_sed='s_i.86_i386_;s_pentium[34]_i386_;s_athlon_i386_;s_sparc[^-]*_sparc_;s_alpha[^-]*_alpha_;s_arm[^-]*_arm_;s_\(powerpc\|ppc\)[^-]*_ppc_;s,\(ia32e\|amd64\),x86_64,;s_sh4a_sh4_'
- arch="`$RPM --eval '%{_arch}'|sed -e "$canonarch_sed"`"
-+echo "arch=$arch"
- VENDOR="`$RPM --eval '%{_vendor}'`"
- OS="`$RPM --eval '%{_os}'`"
- RPMRC_GNU="`$RPM --eval '%{_gnu}'`"
-@@ -30,6 +31,7 @@
- 
- for SUBST in $SUBSTS ; do
-   ARCH=`echo $arch | sed -e $SUBST`
-+  echo "ARCH=$ARCH"
-   TARGET_PLATFORM=`echo $target_platform | sed -e $SUBST`
-   TARGET=`echo $target | sed -e $SUBST`
- 
-@@ -145,6 +147,7 @@
- 	$VENDORSED \
+@@ -132,5 +132,6 @@
    | grep -v '^@' \
+   | ${FILTER} \
    > ${PPD}/macros
 +  echo "Created ${PPD}/macros"
  
  done
- 

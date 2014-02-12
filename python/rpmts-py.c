@@ -1,5 +1,7 @@
 #include "rpmsystem-py.h"
 
+#include <fcntl.h>
+
 #include <rpm/rpmlib.h>	/* rpmReadPackageFile, headerCheck */
 #include <rpm/rpmtag.h>
 #include <rpm/rpmpgp.h>
@@ -12,12 +14,10 @@
 #include "rpmkeyring-py.h"
 #include "rpmfi-py.h"	/* XXX for rpmfiNew */
 #include "rpmmi-py.h"
+#include "rpmii-py.h"
 #include "rpmps-py.h"
 #include "rpmte-py.h"
-
 #include "rpmts-py.h"
-
-#include "debug.h"
 
 /** \ingroup python
  * \name Class: Rpmts
@@ -162,7 +162,7 @@ static void die(PyObject *cb)
     if ((r = PyObject_Repr(cb)) != NULL) { 
 	pyfn = PyBytes_AsString(r);
     }
-    fprintf(stderr, _("error: python callback %s failed, aborting!\n"), 
+    fprintf(stderr, "FATAL ERROR: python callback %s failed, aborting!\n", 
 	    	      pyfn ? pyfn : "???");
     rpmdbCheckTerminate(1);
     exit(EXIT_FAILURE);
@@ -279,6 +279,14 @@ rpmts_Clean(rpmtsObject * s)
 }
 
 static PyObject *
+rpmts_Clear(rpmtsObject * s)
+{
+    rpmtsEmpty(s->ts);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 rpmts_OpenDB(rpmtsObject * s)
 {
     int dbmode;
@@ -349,7 +357,7 @@ rpmts_HdrFromFdno(rpmtsObject * s, PyObject *arg)
     	return NULL;
 
     Py_BEGIN_ALLOW_THREADS;
-    rpmrc = rpmReadPackageFile(s->ts, rpmfdGetFd(fdo), "rpmts_HdrFromFdno", &h);
+    rpmrc = rpmReadPackageFile(s->ts, rpmfdGetFd(fdo), NULL, &h);
     Py_END_ALLOW_THREADS;
     Py_XDECREF(fdo);
 
@@ -517,15 +525,8 @@ rpmtsCallback(const void * hd, const rpmCallbackType what,
 static PyObject *
 rpmts_Problems(rpmtsObject * s)
 {
-    PyObject *problems = PyList_New(0);
     rpmps ps = rpmtsProblems(s->ts);
-    rpmpsi psi = rpmpsInitIterator(ps);
-    while (rpmpsNextIterator(psi) >= 0) {
-	PyObject *prob = rpmprob_Wrap(&rpmProblem_Type, rpmpsGetProblem(psi));
-	PyList_Append(problems, prob);
-	Py_DECREF(prob);
-    }
-    rpmpsFreeIterator(psi);
+    PyObject *problems = rpmps_AsList(ps);
     rpmpsFree(ps);
     return problems;
 }
@@ -596,7 +597,7 @@ rpmts_Match(rpmtsObject * s, PyObject * args, PyObject * kwds)
 /* XXX lkey *must* be a 32 bit integer, int "works" on all known platforms. */
     int lkey = 0;
     int len = 0;
-    rpmTag tag = RPMDBI_PACKAGES;
+    rpmDbiTagVal tag = RPMDBI_PACKAGES;
     char * kwlist[] = {"tagNumber", "key", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O&O:Match", kwlist,
@@ -635,6 +636,36 @@ exit:
     Py_XDECREF(str);
     return mio;
 }
+static PyObject *
+rpmts_index(rpmtsObject * s, PyObject * args, PyObject * kwds)
+{
+    rpmDbiTagVal tag;
+    PyObject *mio = NULL;
+    char * kwlist[] = {"tag", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&:Keys", kwlist,
+              tagNumFromPyObject, &tag))
+	return NULL;
+
+    /* XXX If not already opened, open the database O_RDONLY now. */
+    if (rpmtsGetRdb(s->ts) == NULL) {
+	int rc = rpmtsOpenDB(s->ts, O_RDONLY);
+	if (rc || rpmtsGetRdb(s->ts) == NULL) {
+	    PyErr_SetString(pyrpmError, "rpmdb open failed");
+	    goto exit;
+	}
+    }
+
+    rpmdbIndexIterator ii = rpmdbIndexIteratorInit(rpmtsGetRdb(s->ts), tag);
+    if (ii == NULL) {
+        PyErr_SetString(PyExc_KeyError, "No index for this tag");
+        return NULL;
+    }
+    mio = rpmii_Wrap(&rpmii_Type, ii, (PyObject*)s);
+
+exit:
+    return mio;
+}
 
 static struct PyMethodDef rpmts_methods[] = {
  {"addInstall",	(PyCFunction) rpmts_AddInstall,	METH_VARARGS,
@@ -654,6 +685,9 @@ static struct PyMethodDef rpmts_methods[] = {
   Note: The callback may not be None.\n" },
  {"clean",	(PyCFunction) rpmts_Clean,	METH_NOARGS,
 	NULL },
+ {"clear",	(PyCFunction) rpmts_Clear,	METH_NOARGS,
+"ts.clear() -> None\n\
+Remove all elements from the transaction set\n" },
  {"openDB",	(PyCFunction) rpmts_OpenDB,	METH_NOARGS,
 "ts.openDB() -> None\n\
 - Open the default transaction rpmdb.\n\
@@ -686,8 +720,11 @@ static struct PyMethodDef rpmts_methods[] = {
  {"setKeyring",	(PyCFunction) rpmts_setKeyring,	METH_O, 
 	NULL },
  {"dbMatch",	(PyCFunction) rpmts_Match,	METH_VARARGS|METH_KEYWORDS,
-"ts.dbMatch([TagN, [key, [len]]]) -> mi\n\
+"ts.dbMatch([TagN, [key]]) -> mi\n\
 - Create a match iterator for the default transaction rpmdb.\n" },
+ {"dbIndex",     (PyCFunction) rpmts_index,	METH_VARARGS|METH_KEYWORDS,
+"ts.dbIndex(TagN) -> ii\n\
+- Create a key iterator for the default transaction rpmdb.\n" },
     {NULL,		NULL}		/* sentinel */
 };
 
@@ -714,7 +751,7 @@ static PyObject * rpmts_new(PyTypeObject * subtype, PyObject *args, PyObject *kw
 
 static int rpmts_init(rpmtsObject *s, PyObject *args, PyObject *kwds)
 {
-    char * rootDir = "/";
+    const char * rootDir = "/";
     rpmVSFlags vsflags = rpmExpandNumeric("%{?__vsflags}");
     char * kwlist[] = {"rootdir", "vsflags", 0};
 
