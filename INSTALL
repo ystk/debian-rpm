@@ -63,12 +63,6 @@ Minimal instructions for building BDB are
     make
     make install
 
-If you want to use the alternative SQLite backend for RPM database instead 
-of the default Berkeley DB, it can be enabled with --enable-sqlite3 option 
-to configure. Note that the SQLite backend is not as tested as BDB. 
-SQLite >= 3.x is required and is available from
-    http://www.sqlite.org/
-
 For embedded Lua scripting support (recommended and enabled by default),
 you'll need Lua >= 5.1 library + development environment installed.
 Note that only the library is needed at runtime, RPM never calls external
@@ -167,20 +161,12 @@ and then install with:
 
     make install
 
-If you wish to make a tarfile of the binaries so that you may easily
-install on machines with OS package managers other then rpm (ed note:
-what about putting gzip and bzip2 in the tar, modifying the
-/etc/rpmrc?):
+Rpm comes with an automated self-test suite. The test-suite relies heavily
+on fakechroot (https://github.com/fakechroot/) and cannot be executed
+without it. Provided that fakechroot was found during configure,
+it can be executed after a succesful build with:
 
-    make tar
-
-when installing. If you do install from a tarball, you will need to do
-something like
-
-    mkdir /var/lib/rpm
-    rpm --initdb
-
-to initialize your rpm database.
+    make check
 
 Finally, if you wish to prepare an rpm source tar ball, you should do
 
@@ -241,7 +227,7 @@ with:
 and if you wish to ensure that some directories are not traversed you
 can use the option: 
 
-    --ignore_dirs 'egrep|pattern|of|paths|to|ignore
+    --ignore_dirs 'grep-E|pattern|of|paths|to|ignore
 
 By default the generated rpm will include a %verifyscript to verify
 checksum of all files traversed has not changed.  This additional
@@ -317,13 +303,12 @@ Pro would want `i586pro' over `i586-pro', but it does make parsing
 this filename by other programs a bit more difficult.
 
 
-GPG/PGP/PGP5
-------------
+GPG
+---
 
 To use the signing features of rpm, you will need to configure certain
 rpm macros in ~/.rpmmacros:
 
-	%_signature     gpg
 	%_gpg_name      <GPG UID>
 	%_gpg_path      %(echo $HOME)/.gnupg
 

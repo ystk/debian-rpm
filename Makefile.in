@@ -20,6 +20,7 @@
 
 
 
+
 VPATH = @srcdir@
 pkgdatadir = $(datadir)/@PACKAGE@
 pkgincludedir = $(includedir)/@PACKAGE@
@@ -47,17 +48,20 @@ DIST_COMMON = README $(am__configure_deps) $(dist_bin_SCRIPTS) \
 	config.guess config.rpath config.sub depcomp install-sh \
 	ltmain.sh missing mkinstalldirs
 @WITH_INTERNAL_DB_TRUE@am__append_1 = db3
-@WITH_LUAEXT_TRUE@am__append_2 = luaext
+@WITH_LUA_TRUE@am__append_2 = luaext
+@ENABLE_PYTHON_TRUE@am__append_3 = python
+@ENABLE_PLUGINS_TRUE@am__append_4 = plugins
+@HAVE_FAKECHROOT_TRUE@am__append_5 = tests
 rpmbin_PROGRAMS = rpm$(EXEEXT)
-bin_PROGRAMS = rpm2cpio$(EXEEXT) rpmbuild$(EXEEXT) rpmgraph$(EXEEXT)
-rpmlibexec_PROGRAMS = $(am__EXEEXT_1) javadeps$(EXEEXT) \
-	rpmdeps$(EXEEXT)
-@LIBDWARF_TRUE@@LIBELF_TRUE@am__append_3 = scripts/find-debuginfo.sh
-@LIBDWARF_TRUE@@LIBELF_TRUE@am__append_4 = debugedit
-check_PROGRAMS = rpminject$(EXEEXT) rpmsort$(EXEEXT)
-@DOXYGEN_TRUE@@HACKINGDOCS_TRUE@am__append_5 = doc/hacking/html/index.html
-@DOXYGEN_TRUE@am__append_6 = doc/librpm/html/index.html
-@WITH_INTERNAL_DB_TRUE@am__append_7 = db.h
+bin_PROGRAMS = rpm2cpio$(EXEEXT) rpmbuild$(EXEEXT) rpmdb$(EXEEXT) \
+	rpmkeys$(EXEEXT) rpmsign$(EXEEXT) rpmspec$(EXEEXT) \
+	rpmgraph$(EXEEXT)
+rpmlibexec_PROGRAMS = $(am__EXEEXT_1) rpmdeps$(EXEEXT)
+@LIBDWARF_TRUE@@LIBELF_TRUE@am__append_6 = scripts/find-debuginfo.sh
+@LIBDWARF_TRUE@@LIBELF_TRUE@am__append_7 = debugedit elfdeps
+@DOXYGEN_TRUE@@HACKINGDOCS_TRUE@am__append_8 = doc/hacking/html/index.html
+@DOXYGEN_TRUE@am__append_9 = doc/librpm/html/index.html
+@WITH_INTERNAL_DB_TRUE@am__append_10 = db.h
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/gettext.m4 \
@@ -76,12 +80,20 @@ mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
+LTLIBRARIES = $(noinst_LTLIBRARIES)
+libcliutils_la_DEPENDENCIES = lib/librpm.la rpmio/librpmio.la
+am_libcliutils_la_OBJECTS = libcliutils_la-cliutils.lo
+libcliutils_la_OBJECTS = $(am_libcliutils_la_OBJECTS)
+AM_V_lt = $(am__v_lt_$(V))
+am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
+am__v_lt_0 = --silent
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(rpmbindir)" \
 	"$(DESTDIR)$(rpmlibexecdir)" "$(DESTDIR)$(bindir)" \
 	"$(DESTDIR)$(rpmconfigdir)" "$(DESTDIR)$(pkgconfigdir)" \
 	"$(DESTDIR)$(rpmconfigdir)" "$(DESTDIR)$(rpmvardir)" \
 	"$(DESTDIR)$(pkgincludedir)" "$(DESTDIR)$(pkgincludedir)"
-@LIBDWARF_TRUE@@LIBELF_TRUE@am__EXEEXT_1 = debugedit$(EXEEXT)
+@LIBDWARF_TRUE@@LIBELF_TRUE@am__EXEEXT_1 = debugedit$(EXEEXT) \
+@LIBDWARF_TRUE@@LIBELF_TRUE@	elfdeps$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS) $(rpmbin_PROGRAMS) $(rpmlibexec_PROGRAMS)
 am__debugedit_SOURCES_DIST = tools/debugedit.c tools/hashtab.c \
 	tools/hashtab.h
@@ -92,21 +104,24 @@ am__dirstamp = $(am__leading_dot)dirstamp
 debugedit_OBJECTS = $(am_debugedit_OBJECTS)
 @LIBDWARF_TRUE@@LIBELF_TRUE@debugedit_DEPENDENCIES =  \
 @LIBDWARF_TRUE@@LIBELF_TRUE@	rpmio/librpmio.la
-am_javadeps_OBJECTS = tools/javadeps.$(OBJEXT)
-javadeps_OBJECTS = $(am_javadeps_OBJECTS)
-javadeps_DEPENDENCIES =
+am__elfdeps_SOURCES_DIST = tools/elfdeps.c
+@LIBDWARF_TRUE@@LIBELF_TRUE@am_elfdeps_OBJECTS =  \
+@LIBDWARF_TRUE@@LIBELF_TRUE@	tools/elfdeps.$(OBJEXT)
+elfdeps_OBJECTS = $(am_elfdeps_OBJECTS)
+@LIBDWARF_TRUE@@LIBELF_TRUE@elfdeps_DEPENDENCIES = rpmio/librpmio.la
 am_rpm_OBJECTS = rpm-rpmqv.$(OBJEXT)
 rpm_OBJECTS = $(am_rpm_OBJECTS)
-rpm_DEPENDENCIES = build/librpmbuild.la lib/librpm.la \
-	rpmio/librpmio.la
+rpm_DEPENDENCIES = libcliutils.la lib/librpm.la rpmio/librpmio.la
 am_rpm2cpio_OBJECTS = rpm2cpio.$(OBJEXT)
 rpm2cpio_OBJECTS = $(am_rpm2cpio_OBJECTS)
 rpm2cpio_DEPENDENCIES = lib/librpm.la rpmio/librpmio.la
-am_rpmbuild_OBJECTS = rpmbuild-build.$(OBJEXT) \
-	rpmbuild-rpmqv.$(OBJEXT)
+am_rpmbuild_OBJECTS = rpmbuild-rpmbuild.$(OBJEXT)
 rpmbuild_OBJECTS = $(am_rpmbuild_OBJECTS)
-rpmbuild_DEPENDENCIES = build/librpmbuild.la lib/librpm.la \
-	rpmio/librpmio.la
+rpmbuild_DEPENDENCIES = libcliutils.la build/librpmbuild.la \
+	lib/librpm.la rpmio/librpmio.la
+am_rpmdb_OBJECTS = rpmdb-rpmdb.$(OBJEXT)
+rpmdb_OBJECTS = $(am_rpmdb_OBJECTS)
+rpmdb_DEPENDENCIES = libcliutils.la lib/librpm.la rpmio/librpmio.la
 am_rpmdeps_OBJECTS = tools/rpmdeps.$(OBJEXT)
 rpmdeps_OBJECTS = $(am_rpmdeps_OBJECTS)
 rpmdeps_DEPENDENCIES = lib/librpm.la rpmio/librpmio.la \
@@ -114,12 +129,17 @@ rpmdeps_DEPENDENCIES = lib/librpm.la rpmio/librpmio.la \
 am_rpmgraph_OBJECTS = tools/rpmgraph.$(OBJEXT)
 rpmgraph_OBJECTS = $(am_rpmgraph_OBJECTS)
 rpmgraph_DEPENDENCIES = lib/librpm.la rpmio/librpmio.la
-am_rpminject_OBJECTS = tools/rpminject.$(OBJEXT)
-rpminject_OBJECTS = $(am_rpminject_OBJECTS)
-rpminject_DEPENDENCIES = build/librpmbuild.la
-am_rpmsort_OBJECTS = tools/rpmsort.$(OBJEXT)
-rpmsort_OBJECTS = $(am_rpmsort_OBJECTS)
-rpmsort_DEPENDENCIES = lib/librpm.la
+am_rpmkeys_OBJECTS = rpmkeys-rpmkeys.$(OBJEXT)
+rpmkeys_OBJECTS = $(am_rpmkeys_OBJECTS)
+rpmkeys_DEPENDENCIES = libcliutils.la lib/librpm.la rpmio/librpmio.la
+am_rpmsign_OBJECTS = rpmsign-rpmsign.$(OBJEXT)
+rpmsign_OBJECTS = $(am_rpmsign_OBJECTS)
+rpmsign_DEPENDENCIES = libcliutils.la sign/librpmsign.la lib/librpm.la \
+	rpmio/librpmio.la
+am_rpmspec_OBJECTS = rpmspec-rpmspec.$(OBJEXT)
+rpmspec_OBJECTS = $(am_rpmspec_OBJECTS)
+rpmspec_DEPENDENCIES = libcliutils.la build/librpmbuild.la \
+	lib/librpm.la rpmio/librpmio.la
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
     $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
@@ -148,20 +168,36 @@ am__depfiles_maybe = depfiles
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
-LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
-	--mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LTCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) \
+	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+	$(AM_CFLAGS) $(CFLAGS)
+AM_V_CC = $(am__v_CC_$(V))
+am__v_CC_ = $(am__v_CC_$(AM_DEFAULT_VERBOSITY))
+am__v_CC_0 = @echo "  CC    " $@;
+AM_V_at = $(am__v_at_$(V))
+am__v_at_ = $(am__v_at_$(AM_DEFAULT_VERBOSITY))
+am__v_at_0 = @
 CCLD = $(CC)
-LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
-	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -o $@
-SOURCES = $(debugedit_SOURCES) $(javadeps_SOURCES) $(rpm_SOURCES) \
-	$(rpm2cpio_SOURCES) $(rpmbuild_SOURCES) $(rpmdeps_SOURCES) \
-	$(rpmgraph_SOURCES) $(rpminject_SOURCES) $(rpmsort_SOURCES)
-DIST_SOURCES = $(am__debugedit_SOURCES_DIST) $(javadeps_SOURCES) \
-	$(rpm_SOURCES) $(rpm2cpio_SOURCES) $(rpmbuild_SOURCES) \
-	$(rpmdeps_SOURCES) $(rpmgraph_SOURCES) $(rpminject_SOURCES) \
-	$(rpmsort_SOURCES)
+LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_CCLD = $(am__v_CCLD_$(V))
+am__v_CCLD_ = $(am__v_CCLD_$(AM_DEFAULT_VERBOSITY))
+am__v_CCLD_0 = @echo "  CCLD  " $@;
+AM_V_GEN = $(am__v_GEN_$(V))
+am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
+am__v_GEN_0 = @echo "  GEN   " $@;
+SOURCES = $(libcliutils_la_SOURCES) $(debugedit_SOURCES) \
+	$(elfdeps_SOURCES) $(rpm_SOURCES) $(rpm2cpio_SOURCES) \
+	$(rpmbuild_SOURCES) $(rpmdb_SOURCES) $(rpmdeps_SOURCES) \
+	$(rpmgraph_SOURCES) $(rpmkeys_SOURCES) $(rpmsign_SOURCES) \
+	$(rpmspec_SOURCES)
+DIST_SOURCES = $(libcliutils_la_SOURCES) $(am__debugedit_SOURCES_DIST) \
+	$(am__elfdeps_SOURCES_DIST) $(rpm_SOURCES) $(rpm2cpio_SOURCES) \
+	$(rpmbuild_SOURCES) $(rpmdb_SOURCES) $(rpmdeps_SOURCES) \
+	$(rpmgraph_SOURCES) $(rpmkeys_SOURCES) $(rpmsign_SOURCES) \
+	$(rpmspec_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -217,6 +253,7 @@ distuninstallcheck_listfiles = find . -type f -print
 distcleancheck_listfiles = find . -type f -print
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
+AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
 AS = @AS@
 AUTOCONF = @AUTOCONF@
@@ -236,6 +273,7 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DOXYGEN = @DOXYGEN@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -269,7 +307,10 @@ LN_S = @LN_S@
 LTLIBICONV = @LTLIBICONV@
 LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
+LUA_CFLAGS = @LUA_CFLAGS@
+LUA_LIBS = @LUA_LIBS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MSGFMT = @MSGFMT@
 MSGFMT_015 = @MSGFMT_015@
@@ -288,6 +329,9 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
 PYTHON = @PYTHON@
 PYTHON_EXEC_PREFIX = @PYTHON_EXEC_PREFIX@
@@ -295,14 +339,10 @@ PYTHON_PLATFORM = @PYTHON_PLATFORM@
 PYTHON_PREFIX = @PYTHON_PREFIX@
 PYTHON_VERSION = @PYTHON_VERSION@
 RANLIB = @RANLIB@
-RPMCANONARCH = @RPMCANONARCH@
-RPMCANONCOLOR = @RPMCANONCOLOR@
 RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
-RPM_MKDIR = @RPM_MKDIR@
-RPM_MKDIR_P = @RPM_MKDIR_P@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -313,10 +353,7 @@ WITH_ACL_LIB = @WITH_ACL_LIB@
 WITH_BZ2_LIB = @WITH_BZ2_LIB@
 WITH_CAP_LIB = @WITH_CAP_LIB@
 WITH_DB_LIB = @WITH_DB_LIB@
-WITH_LIBELF_INCLUDE = @WITH_LIBELF_INCLUDE@
 WITH_LIBELF_LIB = @WITH_LIBELF_LIB@
-WITH_LUA_INCLUDE = @WITH_LUA_INCLUDE@
-WITH_LUA_LIB = @WITH_LUA_LIB@
 WITH_LZMA_LIB = @WITH_LZMA_LIB@
 WITH_MAGIC_INCLUDE = @WITH_MAGIC_INCLUDE@
 WITH_MAGIC_LIB = @WITH_MAGIC_LIB@
@@ -327,22 +364,20 @@ WITH_POPT_LIB = @WITH_POPT_LIB@
 WITH_PYTHON_INCLUDE = @WITH_PYTHON_INCLUDE@
 WITH_PYTHON_LIB = @WITH_PYTHON_LIB@
 WITH_SELINUX_LIB = @WITH_SELINUX_LIB@
-WITH_SQLITE3_INCLUDE = @WITH_SQLITE3_INCLUDE@
-WITH_SQLITE3_LIB = @WITH_SQLITE3_LIB@
+WITH_SEMANAGE_LIB = @WITH_SEMANAGE_LIB@
 WITH_ZLIB_INCLUDE = @WITH_ZLIB_INCLUDE@
 WITH_ZLIB_LIB = @WITH_ZLIB_LIB@
 XGETTEXT = @XGETTEXT@
 XGETTEXT_015 = @XGETTEXT_015@
 YACC = @YACC@
 YFLAGS = @YFLAGS@
+__7ZIP = @__7ZIP@
 __BZIP2 = @__BZIP2@
 __CAT = @__CAT@
 __CC = @__CC@
 __CHGRP = @__CHGRP@
-__CHGRP_RHF = @__CHGRP_RHF@
 __CHMOD = @__CHMOD@
 __CHOWN = @__CHOWN@
-__CHOWN_RHF = @__CHOWN_RHF@
 __CP = @__CP@
 __CPIO = @__CPIO@
 __CURL = @__CURL@
@@ -352,11 +387,13 @@ __GPG = @__GPG@
 __GREP = @__GREP@
 __GZIP = @__GZIP@
 __ID = @__ID@
-__ID_U = @__ID_U@
 __INSTALL = @__INSTALL@
 __LD = @__LD@
+__LRZIP = @__LRZIP@
+__LZIP = @__LZIP@
 __MAKE = @__MAKE@
 __MKDIR = @__MKDIR@
+__MKDIR_P = @__MKDIR_P@
 __MV = @__MV@
 __NM = @__NM@
 __OBJCOPY = @__OBJCOPY@
@@ -365,9 +402,11 @@ __PATCH = @__PATCH@
 __PERL = @__PERL@
 __PGP = @__PGP@
 __PYTHON = @__PYTHON@
+__RESTORECON = @__RESTORECON@
 __RM = @__RM@
 __RSH = @__RSH@
 __SED = @__SED@
+__SEMODULE = @__SEMODULE@
 __SSH = @__SSH@
 __STRIP = @__STRIP@
 __TAR = @__TAR@
@@ -377,6 +416,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
@@ -411,7 +451,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -447,88 +486,112 @@ CLEANFILES = rpmrc.tmp rpmrc macros platform.tmp platform rpm.pc.tmp \
 	include/rpm/rpmpgp.h include/rpm/rpmsq.h \
 	include/rpm/rpmstring.h include/rpm/rpmsw.h \
 	include/rpm/rpmfileutil.h include/rpm/rpmutil.h \
-	include/rpm/rpmkeyring.h include/rpm/header.h \
-	include/rpm/rpmdb.h include/rpm/rpmcallback.h \
-	include/rpm/rpmcli.h include/rpm/rpmlib.h include/rpm/rpmds.h \
-	include/rpm/rpmfi.h include/rpm/rpmgi.h \
-	include/rpm/rpmlegacy.h include/rpm/rpmps.h \
-	include/rpm/rpmtag.h include/rpm/rpmtd.h include/rpm/rpmte.h \
-	include/rpm/rpmts.h include/rpm/rpmtypes.h include/rpm/rpmvf.h \
-	include/rpm/rpmbuild.h include/rpm/rpmfc.h \
-	include/rpm/rpmspec.h
+	include/rpm/rpmkeyring.h include/rpm/rpmbase64.h \
+	include/rpm/header.h include/rpm/rpmdb.h \
+	include/rpm/rpmcallback.h include/rpm/rpmcli.h \
+	include/rpm/rpmlib.h include/rpm/rpmds.h include/rpm/rpmfi.h \
+	include/rpm/rpmlegacy.h include/rpm/rpmpol.h \
+	include/rpm/rpmps.h include/rpm/rpmprob.h include/rpm/rpmtag.h \
+	include/rpm/rpmtd.h include/rpm/rpmte.h include/rpm/rpmts.h \
+	include/rpm/rpmtypes.h include/rpm/rpmvf.h \
+	include/rpm/rpmsign.h include/rpm/rpmbuild.h \
+	include/rpm/rpmfc.h include/rpm/rpmspec.h
 EXTRA_DIST = CHANGES ChangeLog CREDITS GROUPS INSTALL autodeps \
 	autogen.sh db3/configure installplatform platform.in rpmrc.in \
 	macros.in platform.in rpm.pc.in rpmpopt.in doc/hacking.doxy.in \
 	doc/hacking/Doxyheader doc/librpm.doxy.in \
 	doc/librpm/Doxyheader doc/librpm/html
-BUILT_SOURCES = $(am__append_7) include/rpm/argv.h include/rpm/rpmio.h \
-	include/rpm/rpmurl.h include/rpm/rpmmacro.h \
-	include/rpm/rpmlog.h include/rpm/rpmpgp.h include/rpm/rpmsq.h \
+BUILT_SOURCES = $(am__append_10) include/rpm/argv.h \
+	include/rpm/rpmio.h include/rpm/rpmurl.h \
+	include/rpm/rpmmacro.h include/rpm/rpmlog.h \
+	include/rpm/rpmpgp.h include/rpm/rpmsq.h \
 	include/rpm/rpmstring.h include/rpm/rpmsw.h \
 	include/rpm/rpmfileutil.h include/rpm/rpmutil.h \
-	include/rpm/rpmkeyring.h include/rpm/header.h \
-	include/rpm/rpmdb.h include/rpm/rpmcallback.h \
-	include/rpm/rpmcli.h include/rpm/rpmlib.h include/rpm/rpmds.h \
-	include/rpm/rpmfi.h include/rpm/rpmgi.h \
-	include/rpm/rpmlegacy.h include/rpm/rpmps.h \
-	include/rpm/rpmtag.h include/rpm/rpmtd.h include/rpm/rpmte.h \
-	include/rpm/rpmts.h include/rpm/rpmtypes.h include/rpm/rpmvf.h \
-	include/rpm/rpmbuild.h include/rpm/rpmfc.h \
-	include/rpm/rpmspec.h
-SUBDIRS = po misc $(am__append_1) $(am__append_2) rpmio lib build \
-	python scripts doc . tests
-DIST_SUBDIRS = po misc luaext rpmio lib build python scripts doc tests
+	include/rpm/rpmkeyring.h include/rpm/rpmbase64.h \
+	include/rpm/header.h include/rpm/rpmdb.h \
+	include/rpm/rpmcallback.h include/rpm/rpmcli.h \
+	include/rpm/rpmlib.h include/rpm/rpmds.h include/rpm/rpmfi.h \
+	include/rpm/rpmlegacy.h include/rpm/rpmpol.h \
+	include/rpm/rpmps.h include/rpm/rpmprob.h include/rpm/rpmtag.h \
+	include/rpm/rpmtd.h include/rpm/rpmte.h include/rpm/rpmts.h \
+	include/rpm/rpmtypes.h include/rpm/rpmvf.h \
+	include/rpm/rpmsign.h include/rpm/rpmbuild.h \
+	include/rpm/rpmfc.h include/rpm/rpmspec.h
+SUBDIRS = po misc $(am__append_1) $(am__append_2) rpmio lib sign build \
+	scripts fileattrs doc . $(am__append_3) $(am__append_4) \
+	$(am__append_5)
+DIST_SUBDIRS = po misc luaext rpmio lib sign build python scripts fileattrs doc tests plugins
 pkgconfigdir = $(libdir)/pkgconfig
 AM_CPPFLAGS = -I$(top_builddir) -I$(top_srcdir) \
 	-I$(top_builddir)/include/ -I$(top_srcdir)/build \
 	-I$(top_srcdir)/lib -I$(top_srcdir)/rpmio @WITH_NSS_INCLUDE@ \
-	@WITH_POPT_INCLUDE@ -I$(top_srcdir)/misc @WITH_LIBELF_INCLUDE@ \
+	@WITH_POPT_INCLUDE@ -I$(top_srcdir)/misc \
 	-DLOCALEDIR="\"$(localedir)\"" \
 	-DLIBRPMALIAS_FILENAME="\"rpmpopt-${VERSION}\""
 pkginclude_HEADERS = rpmio/argv.h rpmio/rpmio.h rpmio/rpmurl.h \
 	rpmio/rpmmacro.h rpmio/rpmlog.h rpmio/rpmpgp.h rpmio/rpmsq.h \
 	rpmio/rpmstring.h rpmio/rpmsw.h rpmio/rpmfileutil.h \
-	rpmio/rpmutil.h rpmio/rpmkeyring.h lib/header.h lib/rpmdb.h \
-	lib/rpmcallback.h lib/rpmcli.h lib/rpmlib.h lib/rpmds.h \
-	lib/rpmfi.h lib/rpmgi.h lib/rpmlegacy.h lib/rpmps.h \
-	lib/rpmtag.h lib/rpmtd.h lib/rpmte.h lib/rpmts.h \
-	lib/rpmtypes.h lib/rpmvf.h build/rpmbuild.h build/rpmfc.h \
-	build/rpmspec.h
+	rpmio/rpmutil.h rpmio/rpmkeyring.h rpmio/rpmbase64.h \
+	lib/header.h lib/rpmdb.h lib/rpmcallback.h lib/rpmcli.h \
+	lib/rpmlib.h lib/rpmds.h lib/rpmfi.h lib/rpmlegacy.h \
+	lib/rpmpol.h lib/rpmps.h lib/rpmprob.h lib/rpmtag.h \
+	lib/rpmtd.h lib/rpmte.h lib/rpmts.h lib/rpmtypes.h lib/rpmvf.h \
+	sign/rpmsign.h build/rpmbuild.h build/rpmfc.h build/rpmspec.h
 nodist_pkginclude_HEADERS = 
 rpmbindir = `echo $(bindir) | $(SED) -e s,usr/bin,bin,`
-rpmconfig_SCRIPTS = find-provides find-requires mkinstalldirs \
-	config.guess config.sub $(am__append_3)
-DISTCLEANFILES = find-provides find-requires db.h
+rpmconfig_SCRIPTS = autodeps/find-provides autodeps/find-requires \
+	mkinstalldirs config.guess config.sub $(am__append_6)
+DISTCLEANFILES = autodeps/find-provides autodeps/find-requires db.h
+noinst_LTLIBRARIES = libcliutils.la
+libcliutils_la_SOURCES = cliutils.h cliutils.c
+libcliutils_la_CPPFLAGS = $(AM_CPPFLAGS)
+libcliutils_la_LIBADD = lib/librpm.la rpmio/librpmio.la \
+	@WITH_POPT_LIB@ $(am__empty)
 rpm_SOURCES = rpmqv.c debug.h system.h
-rpm_CPPFLAGS = $(AM_CPPFLAGS) -DIAM_RPMDB -DIAM_RPMEIU -DIAM_RPMK -DIAM_RPMQV
-rpm_LDADD = build/librpmbuild.la lib/librpm.la rpmio/librpmio.la \
-	@WITH_LIBELF_LIB@ @WITH_NSS_LIB@ @WITH_POPT_LIB@ \
+rpm_CPPFLAGS = $(AM_CPPFLAGS) -DIAM_RPMEIU -DIAM_RPMQ -DIAM_RPMV
+rpm_LDADD = libcliutils.la lib/librpm.la rpmio/librpmio.la \
+	@WITH_NSS_LIB@ @WITH_POPT_LIB@ @WITH_ZLIB_LIB@ $(am__empty)
+rpmdb_SOURCES = rpmdb.c debug.h system.h
+rpmdb_CPPFLAGS = $(AM_CPPFLAGS)
+rpmdb_LDADD = libcliutils.la lib/librpm.la rpmio/librpmio.la \
+	@WITH_NSS_LIB@ @WITH_POPT_LIB@ @WITH_ZLIB_LIB@ $(am__empty)
+rpmkeys_SOURCES = rpmkeys.c debug.h system.h
+rpmkeys_CPPFLAGS = $(AM_CPPFLAGS)
+rpmkeys_LDADD = libcliutils.la lib/librpm.la rpmio/librpmio.la \
+	@WITH_NSS_LIB@ @WITH_POPT_LIB@ @WITH_ZLIB_LIB@ $(am__empty)
+rpmsign_SOURCES = rpmsign.c debug.h system.h
+rpmsign_CPPFLAGS = $(AM_CPPFLAGS)
+rpmsign_LDADD = libcliutils.la sign/librpmsign.la lib/librpm.la \
+	rpmio/librpmio.la @WITH_NSS_LIB@ @WITH_POPT_LIB@ \
 	@WITH_ZLIB_LIB@ $(am__empty)
-rpmbuild_SOURCES = build.c rpmqv.c build.h debug.h system.h
-rpmbuild_CPPFLAGS = $(AM_CPPFLAGS) -DIAM_RPMBT
-rpmbuild_LDADD = build/librpmbuild.la lib/librpm.la rpmio/librpmio.la \
-	@WITH_LIBELF_LIB@ @WITH_NSS_LIB@ @WITH_POPT_LIB@ \
+rpmbuild_SOURCES = rpmbuild.c debug.h system.h
+rpmbuild_CPPFLAGS = $(AM_CPPFLAGS)
+rpmbuild_LDADD = libcliutils.la build/librpmbuild.la lib/librpm.la \
+	rpmio/librpmio.la @WITH_NSS_LIB@ @WITH_POPT_LIB@ \
+	@WITH_ZLIB_LIB@ $(am__empty)
+rpmspec_SOURCES = rpmspec.c debug.h system.h
+rpmspec_CPPFLAGS = $(AM_CPPFLAGS)
+rpmspec_LDADD = libcliutils.la build/librpmbuild.la lib/librpm.la \
+	rpmio/librpmio.la @WITH_NSS_LIB@ @WITH_POPT_LIB@ \
 	@WITH_ZLIB_LIB@ $(am__empty)
 rpm2cpio_SOURCES = rpm2cpio.c debug.h system.h
-rpm2cpio_LDADD = lib/librpm.la rpmio/librpmio.la @WITH_LIBELF_LIB@ \
-	@WITH_NSS_LIB@ @WITH_POPT_LIB@ @WITH_ZLIB_LIB@ $(am__empty)
+rpm2cpio_LDADD = lib/librpm.la rpmio/librpmio.la @WITH_NSS_LIB@ \
+	@WITH_POPT_LIB@ @WITH_ZLIB_LIB@ $(am__empty)
 @LIBDWARF_TRUE@@LIBELF_TRUE@debugedit_SOURCES = tools/debugedit.c tools/hashtab.c tools/hashtab.h
 @LIBDWARF_TRUE@@LIBELF_TRUE@debugedit_LDADD = rpmio/librpmio.la \
 @LIBDWARF_TRUE@@LIBELF_TRUE@	@WITH_LIBELF_LIB@ @WITH_POPT_LIB@ \
 @LIBDWARF_TRUE@@LIBELF_TRUE@	$(am__empty)
-javadeps_SOURCES = tools/javadeps.c
-javadeps_LDADD = 
+@LIBDWARF_TRUE@@LIBELF_TRUE@elfdeps_SOURCES = tools/elfdeps.c
+@LIBDWARF_TRUE@@LIBELF_TRUE@elfdeps_LDADD = rpmio/librpmio.la \
+@LIBDWARF_TRUE@@LIBELF_TRUE@	@WITH_LIBELF_LIB@ @WITH_POPT_LIB@ \
+@LIBDWARF_TRUE@@LIBELF_TRUE@	$(am__empty)
 rpmdeps_SOURCES = tools/rpmdeps.c
 rpmdeps_LDADD = lib/librpm.la rpmio/librpmio.la build/librpmbuild.la @WITH_POPT_LIB@
 rpmgraph_SOURCES = tools/rpmgraph.c
 rpmgraph_LDADD = lib/librpm.la rpmio/librpmio.la @WITH_POPT_LIB@
 dist_bin_SCRIPTS = scripts/gendiff
-rpminject_SOURCES = tools/rpminject.c
-rpminject_LDADD = build/librpmbuild.la
-rpmsort_SOURCES = tools/rpmsort.c
-rpmsort_LDADD = lib/librpm.la
 rpmconfig_DATA = rpmrc macros rpmpopt-$(VERSION)
-noinst_DATA = platform $(am__append_5) $(am__append_6)
+noinst_DATA = platform $(am__append_8) $(am__append_9)
 pkgconfig_DATA = rpm.pc
 usrsrcdir = $(prefix)/src
 rpmvardir = $(localstatedir)/lib/rpm
@@ -590,6 +653,17 @@ $(srcdir)/config.h.in:  $(am__configure_deps)
 
 distclean-hdr:
 	-rm -f config.h stamp-h1
+
+clean-noinstLTLIBRARIES:
+	-test -z "$(noinst_LTLIBRARIES)" || rm -f $(noinst_LTLIBRARIES)
+	@list='$(noinst_LTLIBRARIES)'; for p in $$list; do \
+	  dir="`echo $$p | sed -e 's|/[^/]*$$||'`"; \
+	  test "$$dir" != "$$p" || dir=.; \
+	  echo "rm -f \"$${dir}/so_locations\""; \
+	  rm -f "$${dir}/so_locations"; \
+	done
+libcliutils.la: $(libcliutils_la_OBJECTS) $(libcliutils_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(LINK)  $(libcliutils_la_OBJECTS) $(libcliutils_la_LIBADD) $(LIBS)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	test -z "$(bindir)" || $(MKDIR_P) "$(DESTDIR)$(bindir)"
@@ -627,15 +701,6 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	@list='$(bin_PROGRAMS)'; test -n "$$list" || exit 0; \
-	echo " rm -f" $$list; \
-	rm -f $$list || exit $$?; \
-	test -n "$(EXEEXT)" || exit 0; \
-	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
-	echo " rm -f" $$list; \
-	rm -f $$list
-
-clean-checkPROGRAMS:
-	@list='$(check_PROGRAMS)'; test -n "$$list" || exit 0; \
 	echo " rm -f" $$list; \
 	rm -f $$list || exit $$?; \
 	test -n "$(EXEEXT)" || exit 0; \
@@ -740,41 +805,43 @@ tools/hashtab.$(OBJEXT): tools/$(am__dirstamp) \
 	tools/$(DEPDIR)/$(am__dirstamp)
 debugedit$(EXEEXT): $(debugedit_OBJECTS) $(debugedit_DEPENDENCIES) 
 	@rm -f debugedit$(EXEEXT)
-	$(LINK) $(debugedit_OBJECTS) $(debugedit_LDADD) $(LIBS)
-tools/javadeps.$(OBJEXT): tools/$(am__dirstamp) \
+	$(AM_V_CCLD)$(LINK) $(debugedit_OBJECTS) $(debugedit_LDADD) $(LIBS)
+tools/elfdeps.$(OBJEXT): tools/$(am__dirstamp) \
 	tools/$(DEPDIR)/$(am__dirstamp)
-javadeps$(EXEEXT): $(javadeps_OBJECTS) $(javadeps_DEPENDENCIES) 
-	@rm -f javadeps$(EXEEXT)
-	$(LINK) $(javadeps_OBJECTS) $(javadeps_LDADD) $(LIBS)
+elfdeps$(EXEEXT): $(elfdeps_OBJECTS) $(elfdeps_DEPENDENCIES) 
+	@rm -f elfdeps$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(elfdeps_OBJECTS) $(elfdeps_LDADD) $(LIBS)
 rpm$(EXEEXT): $(rpm_OBJECTS) $(rpm_DEPENDENCIES) 
 	@rm -f rpm$(EXEEXT)
-	$(LINK) $(rpm_OBJECTS) $(rpm_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(rpm_OBJECTS) $(rpm_LDADD) $(LIBS)
 rpm2cpio$(EXEEXT): $(rpm2cpio_OBJECTS) $(rpm2cpio_DEPENDENCIES) 
 	@rm -f rpm2cpio$(EXEEXT)
-	$(LINK) $(rpm2cpio_OBJECTS) $(rpm2cpio_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(rpm2cpio_OBJECTS) $(rpm2cpio_LDADD) $(LIBS)
 rpmbuild$(EXEEXT): $(rpmbuild_OBJECTS) $(rpmbuild_DEPENDENCIES) 
 	@rm -f rpmbuild$(EXEEXT)
-	$(LINK) $(rpmbuild_OBJECTS) $(rpmbuild_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(rpmbuild_OBJECTS) $(rpmbuild_LDADD) $(LIBS)
+rpmdb$(EXEEXT): $(rpmdb_OBJECTS) $(rpmdb_DEPENDENCIES) 
+	@rm -f rpmdb$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(rpmdb_OBJECTS) $(rpmdb_LDADD) $(LIBS)
 tools/rpmdeps.$(OBJEXT): tools/$(am__dirstamp) \
 	tools/$(DEPDIR)/$(am__dirstamp)
 rpmdeps$(EXEEXT): $(rpmdeps_OBJECTS) $(rpmdeps_DEPENDENCIES) 
 	@rm -f rpmdeps$(EXEEXT)
-	$(LINK) $(rpmdeps_OBJECTS) $(rpmdeps_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(rpmdeps_OBJECTS) $(rpmdeps_LDADD) $(LIBS)
 tools/rpmgraph.$(OBJEXT): tools/$(am__dirstamp) \
 	tools/$(DEPDIR)/$(am__dirstamp)
 rpmgraph$(EXEEXT): $(rpmgraph_OBJECTS) $(rpmgraph_DEPENDENCIES) 
 	@rm -f rpmgraph$(EXEEXT)
-	$(LINK) $(rpmgraph_OBJECTS) $(rpmgraph_LDADD) $(LIBS)
-tools/rpminject.$(OBJEXT): tools/$(am__dirstamp) \
-	tools/$(DEPDIR)/$(am__dirstamp)
-rpminject$(EXEEXT): $(rpminject_OBJECTS) $(rpminject_DEPENDENCIES) 
-	@rm -f rpminject$(EXEEXT)
-	$(LINK) $(rpminject_OBJECTS) $(rpminject_LDADD) $(LIBS)
-tools/rpmsort.$(OBJEXT): tools/$(am__dirstamp) \
-	tools/$(DEPDIR)/$(am__dirstamp)
-rpmsort$(EXEEXT): $(rpmsort_OBJECTS) $(rpmsort_DEPENDENCIES) 
-	@rm -f rpmsort$(EXEEXT)
-	$(LINK) $(rpmsort_OBJECTS) $(rpmsort_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(rpmgraph_OBJECTS) $(rpmgraph_LDADD) $(LIBS)
+rpmkeys$(EXEEXT): $(rpmkeys_OBJECTS) $(rpmkeys_DEPENDENCIES) 
+	@rm -f rpmkeys$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(rpmkeys_OBJECTS) $(rpmkeys_LDADD) $(LIBS)
+rpmsign$(EXEEXT): $(rpmsign_OBJECTS) $(rpmsign_DEPENDENCIES) 
+	@rm -f rpmsign$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(rpmsign_OBJECTS) $(rpmsign_LDADD) $(LIBS)
+rpmspec$(EXEEXT): $(rpmspec_OBJECTS) $(rpmspec_DEPENDENCIES) 
+	@rm -f rpmspec$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(rpmspec_OBJECTS) $(rpmspec_LDADD) $(LIBS)
 install-dist_binSCRIPTS: $(dist_bin_SCRIPTS)
 	@$(NORMAL_INSTALL)
 	test -z "$(bindir)" || $(MKDIR_P) "$(DESTDIR)$(bindir)"
@@ -847,93 +914,158 @@ uninstall-rpmconfigSCRIPTS:
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 	-rm -f tools/debugedit.$(OBJEXT)
+	-rm -f tools/elfdeps.$(OBJEXT)
 	-rm -f tools/hashtab.$(OBJEXT)
-	-rm -f tools/javadeps.$(OBJEXT)
 	-rm -f tools/rpmdeps.$(OBJEXT)
 	-rm -f tools/rpmgraph.$(OBJEXT)
-	-rm -f tools/rpminject.$(OBJEXT)
-	-rm -f tools/rpmsort.$(OBJEXT)
 
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libcliutils_la-cliutils.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpm-rpmqv.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpm2cpio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmbuild-build.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmbuild-rpmqv.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmbuild-rpmbuild.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmdb-rpmdb.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmkeys-rpmkeys.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmsign-rpmsign.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpmspec-rpmspec.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/debugedit.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/elfdeps.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/hashtab.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/javadeps.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/rpmdeps.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/rpmgraph.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/rpminject.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@tools/$(DEPDIR)/rpmsort.Po@am__quote@
 
 .c.o:
-@am__fastdepCC_TRUE@	depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
 @am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(COMPILE) -c -o $@ $<
 
 .c.obj:
-@am__fastdepCC_TRUE@	depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ `$(CYGPATH_W) '$<'` &&\
 @am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
 .c.lo:
-@am__fastdepCC_TRUE@	depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
 @am__fastdepCC_TRUE@	$(LTCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
 @am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Plo
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
 
+libcliutils_la-cliutils.lo: cliutils.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcliutils_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libcliutils_la-cliutils.lo -MD -MP -MF $(DEPDIR)/libcliutils_la-cliutils.Tpo -c -o libcliutils_la-cliutils.lo `test -f 'cliutils.c' || echo '$(srcdir)/'`cliutils.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libcliutils_la-cliutils.Tpo $(DEPDIR)/libcliutils_la-cliutils.Plo
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='cliutils.c' object='libcliutils_la-cliutils.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcliutils_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libcliutils_la-cliutils.lo `test -f 'cliutils.c' || echo '$(srcdir)/'`cliutils.c
+
 rpm-rpmqv.o: rpmqv.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpm_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpm-rpmqv.o -MD -MP -MF $(DEPDIR)/rpm-rpmqv.Tpo -c -o rpm-rpmqv.o `test -f 'rpmqv.c' || echo '$(srcdir)/'`rpmqv.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/rpm-rpmqv.Tpo $(DEPDIR)/rpm-rpmqv.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpm_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpm-rpmqv.o -MD -MP -MF $(DEPDIR)/rpm-rpmqv.Tpo -c -o rpm-rpmqv.o `test -f 'rpmqv.c' || echo '$(srcdir)/'`rpmqv.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpm-rpmqv.Tpo $(DEPDIR)/rpm-rpmqv.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmqv.c' object='rpm-rpmqv.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpm_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpm-rpmqv.o `test -f 'rpmqv.c' || echo '$(srcdir)/'`rpmqv.c
 
 rpm-rpmqv.obj: rpmqv.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpm_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpm-rpmqv.obj -MD -MP -MF $(DEPDIR)/rpm-rpmqv.Tpo -c -o rpm-rpmqv.obj `if test -f 'rpmqv.c'; then $(CYGPATH_W) 'rpmqv.c'; else $(CYGPATH_W) '$(srcdir)/rpmqv.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/rpm-rpmqv.Tpo $(DEPDIR)/rpm-rpmqv.Po
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpm_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpm-rpmqv.obj -MD -MP -MF $(DEPDIR)/rpm-rpmqv.Tpo -c -o rpm-rpmqv.obj `if test -f 'rpmqv.c'; then $(CYGPATH_W) 'rpmqv.c'; else $(CYGPATH_W) '$(srcdir)/rpmqv.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpm-rpmqv.Tpo $(DEPDIR)/rpm-rpmqv.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmqv.c' object='rpm-rpmqv.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpm_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpm-rpmqv.obj `if test -f 'rpmqv.c'; then $(CYGPATH_W) 'rpmqv.c'; else $(CYGPATH_W) '$(srcdir)/rpmqv.c'; fi`
 
-rpmbuild-build.o: build.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmbuild-build.o -MD -MP -MF $(DEPDIR)/rpmbuild-build.Tpo -c -o rpmbuild-build.o `test -f 'build.c' || echo '$(srcdir)/'`build.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/rpmbuild-build.Tpo $(DEPDIR)/rpmbuild-build.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='build.c' object='rpmbuild-build.o' libtool=no @AMDEPBACKSLASH@
+rpmbuild-rpmbuild.o: rpmbuild.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmbuild-rpmbuild.o -MD -MP -MF $(DEPDIR)/rpmbuild-rpmbuild.Tpo -c -o rpmbuild-rpmbuild.o `test -f 'rpmbuild.c' || echo '$(srcdir)/'`rpmbuild.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmbuild-rpmbuild.Tpo $(DEPDIR)/rpmbuild-rpmbuild.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmbuild.c' object='rpmbuild-rpmbuild.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmbuild-build.o `test -f 'build.c' || echo '$(srcdir)/'`build.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmbuild-rpmbuild.o `test -f 'rpmbuild.c' || echo '$(srcdir)/'`rpmbuild.c
 
-rpmbuild-build.obj: build.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmbuild-build.obj -MD -MP -MF $(DEPDIR)/rpmbuild-build.Tpo -c -o rpmbuild-build.obj `if test -f 'build.c'; then $(CYGPATH_W) 'build.c'; else $(CYGPATH_W) '$(srcdir)/build.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/rpmbuild-build.Tpo $(DEPDIR)/rpmbuild-build.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='build.c' object='rpmbuild-build.obj' libtool=no @AMDEPBACKSLASH@
+rpmbuild-rpmbuild.obj: rpmbuild.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmbuild-rpmbuild.obj -MD -MP -MF $(DEPDIR)/rpmbuild-rpmbuild.Tpo -c -o rpmbuild-rpmbuild.obj `if test -f 'rpmbuild.c'; then $(CYGPATH_W) 'rpmbuild.c'; else $(CYGPATH_W) '$(srcdir)/rpmbuild.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmbuild-rpmbuild.Tpo $(DEPDIR)/rpmbuild-rpmbuild.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmbuild.c' object='rpmbuild-rpmbuild.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmbuild-build.obj `if test -f 'build.c'; then $(CYGPATH_W) 'build.c'; else $(CYGPATH_W) '$(srcdir)/build.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmbuild-rpmbuild.obj `if test -f 'rpmbuild.c'; then $(CYGPATH_W) 'rpmbuild.c'; else $(CYGPATH_W) '$(srcdir)/rpmbuild.c'; fi`
 
-rpmbuild-rpmqv.o: rpmqv.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmbuild-rpmqv.o -MD -MP -MF $(DEPDIR)/rpmbuild-rpmqv.Tpo -c -o rpmbuild-rpmqv.o `test -f 'rpmqv.c' || echo '$(srcdir)/'`rpmqv.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/rpmbuild-rpmqv.Tpo $(DEPDIR)/rpmbuild-rpmqv.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmqv.c' object='rpmbuild-rpmqv.o' libtool=no @AMDEPBACKSLASH@
+rpmdb-rpmdb.o: rpmdb.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmdb_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmdb-rpmdb.o -MD -MP -MF $(DEPDIR)/rpmdb-rpmdb.Tpo -c -o rpmdb-rpmdb.o `test -f 'rpmdb.c' || echo '$(srcdir)/'`rpmdb.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmdb-rpmdb.Tpo $(DEPDIR)/rpmdb-rpmdb.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmdb.c' object='rpmdb-rpmdb.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmbuild-rpmqv.o `test -f 'rpmqv.c' || echo '$(srcdir)/'`rpmqv.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmdb_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmdb-rpmdb.o `test -f 'rpmdb.c' || echo '$(srcdir)/'`rpmdb.c
 
-rpmbuild-rpmqv.obj: rpmqv.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmbuild-rpmqv.obj -MD -MP -MF $(DEPDIR)/rpmbuild-rpmqv.Tpo -c -o rpmbuild-rpmqv.obj `if test -f 'rpmqv.c'; then $(CYGPATH_W) 'rpmqv.c'; else $(CYGPATH_W) '$(srcdir)/rpmqv.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/rpmbuild-rpmqv.Tpo $(DEPDIR)/rpmbuild-rpmqv.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmqv.c' object='rpmbuild-rpmqv.obj' libtool=no @AMDEPBACKSLASH@
+rpmdb-rpmdb.obj: rpmdb.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmdb_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmdb-rpmdb.obj -MD -MP -MF $(DEPDIR)/rpmdb-rpmdb.Tpo -c -o rpmdb-rpmdb.obj `if test -f 'rpmdb.c'; then $(CYGPATH_W) 'rpmdb.c'; else $(CYGPATH_W) '$(srcdir)/rpmdb.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmdb-rpmdb.Tpo $(DEPDIR)/rpmdb-rpmdb.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmdb.c' object='rpmdb-rpmdb.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmbuild_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmbuild-rpmqv.obj `if test -f 'rpmqv.c'; then $(CYGPATH_W) 'rpmqv.c'; else $(CYGPATH_W) '$(srcdir)/rpmqv.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmdb_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmdb-rpmdb.obj `if test -f 'rpmdb.c'; then $(CYGPATH_W) 'rpmdb.c'; else $(CYGPATH_W) '$(srcdir)/rpmdb.c'; fi`
+
+rpmkeys-rpmkeys.o: rpmkeys.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmkeys_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmkeys-rpmkeys.o -MD -MP -MF $(DEPDIR)/rpmkeys-rpmkeys.Tpo -c -o rpmkeys-rpmkeys.o `test -f 'rpmkeys.c' || echo '$(srcdir)/'`rpmkeys.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmkeys-rpmkeys.Tpo $(DEPDIR)/rpmkeys-rpmkeys.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmkeys.c' object='rpmkeys-rpmkeys.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmkeys_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmkeys-rpmkeys.o `test -f 'rpmkeys.c' || echo '$(srcdir)/'`rpmkeys.c
+
+rpmkeys-rpmkeys.obj: rpmkeys.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmkeys_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmkeys-rpmkeys.obj -MD -MP -MF $(DEPDIR)/rpmkeys-rpmkeys.Tpo -c -o rpmkeys-rpmkeys.obj `if test -f 'rpmkeys.c'; then $(CYGPATH_W) 'rpmkeys.c'; else $(CYGPATH_W) '$(srcdir)/rpmkeys.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmkeys-rpmkeys.Tpo $(DEPDIR)/rpmkeys-rpmkeys.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmkeys.c' object='rpmkeys-rpmkeys.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmkeys_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmkeys-rpmkeys.obj `if test -f 'rpmkeys.c'; then $(CYGPATH_W) 'rpmkeys.c'; else $(CYGPATH_W) '$(srcdir)/rpmkeys.c'; fi`
+
+rpmsign-rpmsign.o: rpmsign.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmsign_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmsign-rpmsign.o -MD -MP -MF $(DEPDIR)/rpmsign-rpmsign.Tpo -c -o rpmsign-rpmsign.o `test -f 'rpmsign.c' || echo '$(srcdir)/'`rpmsign.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmsign-rpmsign.Tpo $(DEPDIR)/rpmsign-rpmsign.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmsign.c' object='rpmsign-rpmsign.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmsign_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmsign-rpmsign.o `test -f 'rpmsign.c' || echo '$(srcdir)/'`rpmsign.c
+
+rpmsign-rpmsign.obj: rpmsign.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmsign_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmsign-rpmsign.obj -MD -MP -MF $(DEPDIR)/rpmsign-rpmsign.Tpo -c -o rpmsign-rpmsign.obj `if test -f 'rpmsign.c'; then $(CYGPATH_W) 'rpmsign.c'; else $(CYGPATH_W) '$(srcdir)/rpmsign.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmsign-rpmsign.Tpo $(DEPDIR)/rpmsign-rpmsign.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmsign.c' object='rpmsign-rpmsign.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmsign_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmsign-rpmsign.obj `if test -f 'rpmsign.c'; then $(CYGPATH_W) 'rpmsign.c'; else $(CYGPATH_W) '$(srcdir)/rpmsign.c'; fi`
+
+rpmspec-rpmspec.o: rpmspec.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmspec_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmspec-rpmspec.o -MD -MP -MF $(DEPDIR)/rpmspec-rpmspec.Tpo -c -o rpmspec-rpmspec.o `test -f 'rpmspec.c' || echo '$(srcdir)/'`rpmspec.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmspec-rpmspec.Tpo $(DEPDIR)/rpmspec-rpmspec.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmspec.c' object='rpmspec-rpmspec.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmspec_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmspec-rpmspec.o `test -f 'rpmspec.c' || echo '$(srcdir)/'`rpmspec.c
+
+rpmspec-rpmspec.obj: rpmspec.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmspec_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT rpmspec-rpmspec.obj -MD -MP -MF $(DEPDIR)/rpmspec-rpmspec.Tpo -c -o rpmspec-rpmspec.obj `if test -f 'rpmspec.c'; then $(CYGPATH_W) 'rpmspec.c'; else $(CYGPATH_W) '$(srcdir)/rpmspec.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/rpmspec-rpmspec.Tpo $(DEPDIR)/rpmspec-rpmspec.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='rpmspec.c' object='rpmspec-rpmspec.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(rpmspec_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o rpmspec-rpmspec.obj `if test -f 'rpmspec.c'; then $(CYGPATH_W) 'rpmspec.c'; else $(CYGPATH_W) '$(srcdir)/rpmspec.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -1355,10 +1487,10 @@ distcleancheck: distclean
 	       $(distcleancheck_listfiles) ; \
 	       exit 1; } >&2
 check-am: all-am
-	$(MAKE) $(AM_MAKEFLAGS) $(check_PROGRAMS)
 check: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) check-recursive
-all-am: Makefile $(PROGRAMS) $(SCRIPTS) $(DATA) $(HEADERS) config.h
+all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(SCRIPTS) $(DATA) \
+		$(HEADERS) config.h
 installdirs: installdirs-recursive
 installdirs-am:
 	for dir in "$(DESTDIR)$(bindir)" "$(DESTDIR)$(rpmbindir)" "$(DESTDIR)$(rpmlibexecdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(rpmconfigdir)" "$(DESTDIR)$(pkgconfigdir)" "$(DESTDIR)$(rpmconfigdir)" "$(DESTDIR)$(rpmvardir)" "$(DESTDIR)$(pkgincludedir)" "$(DESTDIR)$(pkgincludedir)"; do \
@@ -1398,8 +1530,8 @@ maintainer-clean-generic:
 	-test -z "$(MAINTAINERCLEANFILES)" || rm -f $(MAINTAINERCLEANFILES)
 clean: clean-recursive
 
-clean-am: clean-binPROGRAMS clean-checkPROGRAMS clean-generic \
-	clean-libtool clean-local clean-rpmbinPROGRAMS \
+clean-am: clean-binPROGRAMS clean-generic clean-libtool clean-local \
+	clean-noinstLTLIBRARIES clean-rpmbinPROGRAMS \
 	clean-rpmlibexecPROGRAMS mostlyclean-am
 
 distclean: distclean-recursive
@@ -1483,26 +1615,27 @@ uninstall-am: uninstall-binPROGRAMS uninstall-dist_binSCRIPTS \
 	uninstall-rpmvarDATA
 
 .MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) all check \
-	check-am ctags-recursive install install-am install-exec-am \
+	ctags-recursive install install-am install-exec-am \
 	install-strip tags-recursive
 
 .PHONY: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) CTAGS GTAGS \
 	all all-am am--refresh check check-am clean clean-binPROGRAMS \
-	clean-checkPROGRAMS clean-generic clean-libtool clean-local \
-	clean-rpmbinPROGRAMS clean-rpmlibexecPROGRAMS ctags \
-	ctags-recursive dist dist-all dist-bzip2 dist-gzip dist-lzma \
-	dist-shar dist-tarZ dist-xz dist-zip distcheck distclean \
-	distclean-compile distclean-generic distclean-hdr \
-	distclean-libtool distclean-local distclean-tags \
-	distcleancheck distdir distuninstallcheck dvi dvi-am html \
-	html-am info info-am install install-am install-binPROGRAMS \
-	install-data install-data-am install-data-local \
-	install-dist_binSCRIPTS install-dvi install-dvi-am \
-	install-exec install-exec-am install-exec-hook install-html \
-	install-html-am install-info install-info-am install-man \
-	install-nodist_pkgincludeHEADERS install-pdf install-pdf-am \
-	install-pkgconfigDATA install-pkgincludeHEADERS install-ps \
-	install-ps-am install-rpmbinPROGRAMS install-rpmconfigDATA \
+	clean-generic clean-libtool clean-local \
+	clean-noinstLTLIBRARIES clean-rpmbinPROGRAMS \
+	clean-rpmlibexecPROGRAMS ctags ctags-recursive dist dist-all \
+	dist-bzip2 dist-gzip dist-lzma dist-shar dist-tarZ dist-xz \
+	dist-zip distcheck distclean distclean-compile \
+	distclean-generic distclean-hdr distclean-libtool \
+	distclean-local distclean-tags distcleancheck distdir \
+	distuninstallcheck dvi dvi-am html html-am info info-am \
+	install install-am install-binPROGRAMS install-data \
+	install-data-am install-data-local install-dist_binSCRIPTS \
+	install-dvi install-dvi-am install-exec install-exec-am \
+	install-exec-hook install-html install-html-am install-info \
+	install-info-am install-man install-nodist_pkgincludeHEADERS \
+	install-pdf install-pdf-am install-pkgconfigDATA \
+	install-pkgincludeHEADERS install-ps install-ps-am \
+	install-rpmbinPROGRAMS install-rpmconfigDATA \
 	install-rpmconfigSCRIPTS install-rpmlibexecPROGRAMS \
 	install-rpmvarDATA install-strip installcheck installcheck-am \
 	installdirs installdirs-am maintainer-clean \
@@ -1536,32 +1669,27 @@ rpm.pc: $(top_srcdir)/rpm.pc.in
 rpmpopt-@VERSION@: $(top_srcdir)/rpmpopt.in
 	@$(SED) \
 	  -e "s,[@]RPMCONFIGDIR[@],$(rpmconfigdir),g" \
+	  -e "s,[@]BINDIR[@],$(bindir),g" \
 	  < $(top_srcdir)/rpmpopt.in > rpmpopt-@VERSION@.tmp \
 	  && ( cd $(top_builddir) && ./config.status --file=${subdir}/rpmpopt-@VERSION@:${subdir}/rpmpopt-@VERSION@.tmp )
 
 install-exec-hook:
-	rm -f $(DESTDIR)$(bindir)/rpmquery
+	@rm -f $(DESTDIR)$(bindir)/rpmquery
 	@LN_S@ ../../bin/rpm $(DESTDIR)$(bindir)/rpmquery
-	rm -f $(DESTDIR)$(bindir)/rpmverify
+	@rm -f $(DESTDIR)$(bindir)/rpmverify
 	@LN_S@ ../../bin/rpm $(DESTDIR)$(bindir)/rpmverify
-	rm -f $(DESTDIR)$(bindir)/rpmsign
-	@LN_S@ ../../bin/rpm $(DESTDIR)$(bindir)/rpmsign
-	rm -f $(DESTDIR)$(bindir)/rpmdb
-	@LN_S@ ../../bin/rpm $(DESTDIR)$(bindir)/rpmdb
 
 install-data-local:
-	@case "@host_os@" in \
-	solaris*|linux*|darwin*) \
-	   DESTDIR="$(DESTDIR)" pkglibdir="$(rpmconfigdir)" $(SHELL) $(top_srcdir)/installplatform rpmrc macros platform ;; \
-	esac
+	DESTDIR="$(DESTDIR)" pkglibdir="$(rpmconfigdir)" \
+		$(SHELL) $(top_srcdir)/installplatform \
+			rpmrc platform \
+			$(RPMCANONVENDOR) $(RPMCANONOS) $(RPMCANONGNU)
 	@$(MKDIR_P) $(DESTDIR)$(localstatedir)/tmp
 
 # XXX to appease distcheck we need to remove "stuff" here...
 uninstall-local:
 	@rm -f $(DESTDIR)$(bindir)/rpmquery
-	@rm -f $(DESTDIR)$(bindir)/rpmsign
 	@rm -f $(DESTDIR)$(bindir)/rpmverify
-	@rm -f $(DESTDIR)$(bindir)/rpmdb
 	@rm -rf $(DESTDIR)$(rpmconfigdir)/platform/
 
 # Build hacking docs only on request
@@ -1640,6 +1768,8 @@ include/rpm/rpmutil.h: rpmio/rpmutil.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/rpmio/rpmutil.h include/rpm/rpmutil.h
 include/rpm/rpmkeyring.h: rpmio/rpmkeyring.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/rpmio/rpmkeyring.h include/rpm/rpmkeyring.h
+include/rpm/rpmbase64.h: rpmio/rpmbase64.h include/rpm/$(dirstamp)
+	$(INSTALL_DATA) $(top_srcdir)/rpmio/rpmbase64.h include/rpm/rpmbase64.h
 include/rpm/header.h: lib/header.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/header.h include/rpm/header.h
 include/rpm/rpmdb.h: lib/rpmdb.h include/rpm/$(dirstamp)
@@ -1654,12 +1784,14 @@ include/rpm/rpmds.h: lib/rpmds.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmds.h include/rpm/rpmds.h
 include/rpm/rpmfi.h: lib/rpmfi.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmfi.h include/rpm/rpmfi.h
-include/rpm/rpmgi.h: lib/rpmgi.h include/rpm/$(dirstamp)
-	$(INSTALL_DATA) $(top_srcdir)/lib/rpmgi.h include/rpm/rpmgi.h
 include/rpm/rpmlegacy.h: lib/rpmlegacy.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmlegacy.h include/rpm/rpmlegacy.h
+include/rpm/rpmpol.h: lib/rpmpol.h include/rpm/$(dirstamp)
+	$(INSTALL_DATA) $(top_srcdir)/lib/rpmpol.h include/rpm/rpmpol.h
 include/rpm/rpmps.h: lib/rpmps.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmps.h include/rpm/rpmps.h
+include/rpm/rpmprob.h: lib/rpmprob.h include/rpm/$(dirstamp)
+	$(INSTALL_DATA) $(top_srcdir)/lib/rpmprob.h include/rpm/rpmprob.h
 include/rpm/rpmtag.h: lib/rpmtag.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmtag.h include/rpm/rpmtag.h
 include/rpm/rpmtd.h: lib/rpmtd.h include/rpm/$(dirstamp)
@@ -1672,6 +1804,8 @@ include/rpm/rpmtypes.h: lib/rpmtypes.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmtypes.h include/rpm/rpmtypes.h
 include/rpm/rpmvf.h: lib/rpmvf.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/lib/rpmvf.h include/rpm/rpmvf.h
+include/rpm/rpmsign.h: sign/rpmsign.h include/rpm/$(dirstamp)
+	$(INSTALL_DATA) $(top_srcdir)/sign/rpmsign.h include/rpm/rpmsign.h
 include/rpm/rpmbuild.h: build/rpmbuild.h include/rpm/$(dirstamp)
 	$(INSTALL_DATA) $(top_srcdir)/build/rpmbuild.h include/rpm/rpmbuild.h
 include/rpm/rpmfc.h: build/rpmfc.h include/rpm/$(dirstamp)

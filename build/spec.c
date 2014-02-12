@@ -12,14 +12,12 @@
 #include <rpm/rpmlog.h>
 #include <rpm/rpmfileutil.h>
 
-#include "build/buildio.h"
 #include "rpmio/rpmlua.h"
+#include "build/rpmbuild_internal.h"
 
 #include "debug.h"
 
 #define SKIPSPACE(s) { while (*(s) && risspace(*(s))) (s)++; }
-#define SKIPWHITE(_x)	{while(*(_x) && (risspace(*_x) || *(_x) == ',')) (_x)++;}
-#define SKIPNONWHITE(_x){while(*(_x) &&!(risspace(*_x) || *(_x) == ',')) (_x)++;}
 
 /**
  * @param p		trigger entry chain
@@ -36,7 +34,7 @@ struct TriggerFileEntry * freeTriggerFiles(struct TriggerFileEntry * p)
 	o->fileName = _free(o->fileName);
 	o->script = _free(o->script);
 	o->prog = _free(o->prog);
-	o = _free(o);
+	free(o);
     }
     return NULL;
 }
@@ -55,7 +53,7 @@ struct Source * freeSources(struct Source * s)
 	r = t;
 	t = t->next;
 	r->fullSource = _free(r->fullSource);
-	r = _free(r);
+	free(r);
     }
     return NULL;
 }
@@ -97,43 +95,18 @@ rpmRC lookupPackage(rpmSpec spec, const char *name, int flag,Package *pkg)
 
 Package newPackage(rpmSpec spec)
 {
-    Package p;
-    Package pp;
-
-    p = xcalloc(1, sizeof(*p));
-
+    Package p = xcalloc(1, sizeof(*p));
     p->header = headerNew();
-    p->ds = NULL;
-    p->icon = NULL;
-
     p->autoProv = 1;
     p->autoReq = 1;
-    
-#if 0    
-    p->reqProv = NULL;
-    p->triggers = NULL;
-    p->triggerScripts = NULL;
-#endif
-
-    p->triggerFiles = NULL;
-    
-    p->fileFile = NULL;
     p->fileList = NULL;
-
-    p->cpioList = NULL;
-
-    p->preInFile = NULL;
-    p->postInFile = NULL;
-    p->preUnFile = NULL;
-    p->postUnFile = NULL;
-    p->verifyFile = NULL;
-
-    p->specialDoc = NULL;
-    p->specialDocDir = NULL;
+    p->fileFile = NULL;
+    p->policyList = NULL;
 
     if (spec->packages == NULL) {
 	spec->packages = p;
     } else {
+	Package pp;
 	/* Always add package to end of list */
 	for (pp = spec->packages; pp->next != NULL; pp = pp->next)
 	    {};
@@ -144,7 +117,7 @@ Package newPackage(rpmSpec spec)
     return p;
 }
 
-Package freePackage(Package pkg)
+static Package freePackage(Package pkg)
 {
     if (pkg == NULL) return NULL;
     
@@ -156,239 +129,30 @@ Package freePackage(Package pkg)
 
     pkg->header = headerFree(pkg->header);
     pkg->ds = rpmdsFree(pkg->ds);
-    pkg->fileList = freeStringBuf(pkg->fileList);
-    pkg->fileFile = freeStringBuf(pkg->fileFile);
-    if (pkg->cpioList) {
-	rpmfi fi = pkg->cpioList;
-	pkg->cpioList = NULL;
-	fi = rpmfiFree(fi);
-    }
+    pkg->fileList = argvFree(pkg->fileList);
+    pkg->fileFile = argvFree(pkg->fileFile);
+    pkg->policyList = argvFree(pkg->policyList);
+    pkg->cpioList = rpmfiFree(pkg->cpioList);
 
     pkg->specialDoc = freeStringBuf(pkg->specialDoc);
     pkg->specialDocDir = _free(pkg->specialDocDir);
     pkg->icon = freeSources(pkg->icon);
     pkg->triggerFiles = freeTriggerFiles(pkg->triggerFiles);
 
-    pkg = _free(pkg);
+    free(pkg);
     return NULL;
 }
 
-Package freePackages(Package packages)
+static Package freePackages(Package packages)
 {
     Package p;
 
     while ((p = packages) != NULL) {
 	packages = p->next;
 	p->next = NULL;
-	p = freePackage(p);
+	freePackage(p);
     }
     return NULL;
-}
-
-/**
- */
-static inline struct Source *findSource(rpmSpec spec, uint32_t num, int flag)
-{
-    struct Source *p;
-
-    for (p = spec->sources; p != NULL; p = p->next)
-	if ((num == p->num) && (p->flags & flag)) return p;
-
-    return NULL;
-}
-
-int parseNoSource(rpmSpec spec, const char * field, rpmTag tag)
-{
-    const char *f, *fe;
-    const char *name;
-    int flag;
-    uint32_t num;
-
-    if (tag == RPMTAG_NOSOURCE) {
-	flag = RPMBUILD_ISSOURCE;
-	name = "source";
-    } else {
-	flag = RPMBUILD_ISPATCH;
-	name = "patch";
-    }
-    
-    fe = field;
-    for (f = fe; *f != '\0'; f = fe) {
-        struct Source *p;
-
-	SKIPWHITE(f);
-	if (*f == '\0')
-	    break;
-	fe = f;
-	SKIPNONWHITE(fe);
-	if (*fe != '\0') fe++;
-
-	if (parseUnsignedNum(f, &num)) {
-	    rpmlog(RPMLOG_ERR, _("line %d: Bad number: %s\n"),
-		     spec->lineNum, f);
-	    return RPMRC_FAIL;
-	}
-
-	if (! (p = findSource(spec, num, flag))) {
-	    rpmlog(RPMLOG_ERR, _("line %d: Bad no%s number: %u\n"),
-		     spec->lineNum, name, num);
-	    return RPMRC_FAIL;
-	}
-
-	p->flags |= RPMBUILD_ISNO;
-
-    }
-
-    return 0;
-}
-
-int addSource(rpmSpec spec, Package pkg, const char *field, rpmTag tag)
-{
-    struct Source *p;
-    int flag = 0;
-    const char *name = NULL;
-    char *nump;
-    char *fieldp = NULL;
-    char *buf = NULL;
-    uint32_t num = 0;
-
-    switch (tag) {
-      case RPMTAG_SOURCE:
-	flag = RPMBUILD_ISSOURCE;
-	name = "source";
-	fieldp = spec->line + 6;
-	break;
-      case RPMTAG_PATCH:
-	flag = RPMBUILD_ISPATCH;
-	name = "patch";
-	fieldp = spec->line + 5;
-	break;
-      case RPMTAG_ICON:
-	flag = RPMBUILD_ISICON;
-	fieldp = NULL;
-	break;
-      default:
-	return -1;
-	break;
-    }
-
-    /* Get the number */
-    if (tag != RPMTAG_ICON) {
-	/* We already know that a ':' exists, and that there */
-	/* are no spaces before it.                          */
-	/* This also now allows for spaces and tabs between  */
-	/* the number and the ':'                            */
-	char ch;
-	char *fieldp_backup = fieldp;
-
-	while ((*fieldp != ':') && (*fieldp != ' ') && (*fieldp != '\t')) {
-	    fieldp++;
-	}
-	ch = *fieldp;
-	*fieldp = '\0';
-
-	nump = fieldp_backup;
-	SKIPSPACE(nump);
-	if (nump == NULL || *nump == '\0') {
-	    num = flag == RPMBUILD_ISSOURCE ? 0 : INT_MAX;
-	} else {
-	    if (parseUnsignedNum(fieldp_backup, &num)) {
-		rpmlog(RPMLOG_ERR, _("line %d: Bad %s number: %s\n"),
-			 spec->lineNum, name, spec->line);
-		*fieldp = ch;
-		return RPMRC_FAIL;
-	    }
-	}
-	*fieldp = ch;
-    }
-
-    /* Check whether tags of the same number haven't already been defined */
-    for (p = spec->sources; p != NULL; p = p->next) {
-	if ( p->num != num ) continue;
-	if ((tag == RPMTAG_SOURCE && p->flags == RPMBUILD_ISSOURCE) ||
-	    (tag == RPMTAG_PATCH  && p->flags == RPMBUILD_ISPATCH)) {
-		rpmlog(RPMLOG_ERR, _("%s %d defined multiple times\n"), name, num);
-		return RPMRC_FAIL;
-	    }
-    }
-
-    /* Create the entry and link it in */
-    p = xmalloc(sizeof(*p));
-    p->num = num;
-    p->fullSource = xstrdup(field);
-    p->flags = flag;
-    p->source = strrchr(p->fullSource, '/');
-    if (p->source) {
-	p->source++;
-    } else {
-	p->source = p->fullSource;
-    }
-
-    if (tag != RPMTAG_ICON) {
-	p->next = spec->sources;
-	spec->sources = p;
-    } else {
-	p->next = pkg->icon;
-	pkg->icon = p;
-    }
-
-    spec->numSources++;
-
-    if (tag != RPMTAG_ICON) {
-	char *body = rpmGetPath("%{_sourcedir}/", p->source, NULL);
-
-	rasprintf(&buf, "%s%d",
-		(flag & RPMBUILD_ISPATCH) ? "PATCH" : "SOURCE", num);
-	addMacro(spec->macros, buf, NULL, body, RMIL_SPEC);
-	free(buf);
-	rasprintf(&buf, "%sURL%d",
-		(flag & RPMBUILD_ISPATCH) ? "PATCH" : "SOURCE", num);
-	addMacro(spec->macros, buf, NULL, p->fullSource, RMIL_SPEC);
-	free(buf);
-#ifdef WITH_LUA
-	if (!spec->recursing) {
-	    rpmlua lua = NULL; /* global state */
-	    const char * what = (flag & RPMBUILD_ISPATCH) ? "patches" : "sources";
-	    rpmluaPushTable(lua, what);
-	    rpmluav var = rpmluavNew();
-	    rpmluavSetListMode(var, 1);
-	    rpmluavSetValue(var, RPMLUAV_STRING, body);
-	    rpmluaSetVar(lua, var);
-	    var = rpmluavFree(var);
-	    rpmluaPop(lua);
-	}
-#endif
-	body = _free(body);
-    }
-    
-    return 0;
-}
-
-/**
- */
-static inline speclines freeSl(speclines sl)
-{
-    int i;
-    if (sl == NULL) return NULL;
-    for (i = 0; i < sl->sl_nlines; i++)
-	sl->sl_lines[i] = _free(sl->sl_lines[i]);
-    sl->sl_lines = _free(sl->sl_lines);
-    return _free(sl);
-}
-
-/**
- */
-static inline spectags freeSt(spectags st)
-{
-    int i;
-    if (st == NULL) return NULL;
-    for (i = 0; i < st->st_ntags; i++) {
-	spectag t = st->st_t + i;
-	t->t_lang = _free(t->t_lang);
-	t->t_msgid = _free(t->t_msgid);
-    }
-    st->st_t = _free(st->st_t);
-    return _free(st);
 }
 
 rpmSpec newSpec(void)
@@ -396,9 +160,6 @@ rpmSpec newSpec(void)
     rpmSpec spec = xcalloc(1, sizeof(*spec));
     
     spec->specFile = NULL;
-
-    spec->sl = NULL;
-    spec->st = NULL;
 
     spec->fileStack = NULL;
     spec->lbuf[0] = '\0';
@@ -416,6 +177,7 @@ rpmSpec newSpec(void)
     spec->install = NULL;
     spec->check = NULL;
     spec->clean = NULL;
+    spec->parsed = NULL;
 
     spec->sources = NULL;
     spec->packages = NULL;
@@ -430,18 +192,13 @@ rpmSpec newSpec(void)
     spec->buildRoot = NULL;
     spec->buildSubdir = NULL;
 
-    spec->passPhrase = NULL;
-    spec->timeCheck = 0;
-    spec->cookie = NULL;
-
     spec->buildRestrictions = headerNew();
     spec->BANames = NULL;
     spec->BACount = 0;
     spec->recursing = 0;
     spec->BASpecs = NULL;
 
-    spec->force = 0;
-    spec->anyarch = 0;
+    spec->flags = RPMSPEC_NONE;
 
     spec->macros = rpmGlobalMacroContext;
     
@@ -458,23 +215,20 @@ rpmSpec newSpec(void)
     return spec;
 }
 
-rpmSpec freeSpec(rpmSpec spec)
+rpmSpec rpmSpecFree(rpmSpec spec)
 {
 
     if (spec == NULL) return NULL;
-
-    spec->sl = freeSl(spec->sl);
-    spec->st = freeSt(spec->st);
 
     spec->prep = freeStringBuf(spec->prep);
     spec->build = freeStringBuf(spec->build);
     spec->install = freeStringBuf(spec->install);
     spec->check = freeStringBuf(spec->check);
     spec->clean = freeStringBuf(spec->clean);
+    spec->parsed = freeStringBuf(spec->parsed);
 
     spec->buildRoot = _free(spec->buildRoot);
     spec->buildSubdir = _free(spec->buildSubdir);
-    spec->rootDir = _free(spec->rootDir);
     spec->specFile = _free(spec->specFile);
 
     closeSpec(spec);
@@ -489,27 +243,19 @@ rpmSpec freeSpec(rpmSpec spec)
     spec->sourceRpmName = _free(spec->sourceRpmName);
     spec->sourcePkgId = _free(spec->sourcePkgId);
     spec->sourceHeader = headerFree(spec->sourceHeader);
+    spec->sourceCpioList = rpmfiFree(spec->sourceCpioList);
 
-    if (spec->sourceCpioList) {
-	rpmfi fi = spec->sourceCpioList;
-	spec->sourceCpioList = NULL;
-	fi = rpmfiFree(fi);
-    }
-    
     spec->buildRestrictions = headerFree(spec->buildRestrictions);
 
     if (!spec->recursing) {
 	if (spec->BASpecs != NULL)
 	while (spec->BACount--) {
 	    spec->BASpecs[spec->BACount] =
-			freeSpec(spec->BASpecs[spec->BACount]);
+			rpmSpecFree(spec->BASpecs[spec->BACount]);
 	}
 	spec->BASpecs = _free(spec->BASpecs);
     }
     spec->BANames = _free(spec->BANames);
-
-    spec->passPhrase = _free(spec->passPhrase);
-    spec->cookie = _free(spec->cookie);
 
 #ifdef WITH_LUA
     rpmlua lua = NULL; /* global state */
@@ -525,52 +271,157 @@ rpmSpec freeSpec(rpmSpec spec)
     return spec;
 }
 
-struct OpenFileInfo * newOpenFileInfo(void)
+Header rpmSpecSourceHeader(rpmSpec spec)
 {
-    struct OpenFileInfo *ofi;
+	return spec->sourceHeader;
+}
 
-    ofi = xmalloc(sizeof(*ofi));
-    ofi->fp = NULL;
-    ofi->fileName = NULL;
-    ofi->lineNum = 0;
-    ofi->readBuf[0] = '\0';
-    ofi->readPtr = NULL;
-    ofi->next = NULL;
+rpmds rpmSpecDS(rpmSpec spec, rpmTagVal tag)
+{
+    return (spec != NULL) ? rpmdsNew(spec->buildRestrictions, tag, 0) : NULL;
+}
 
-    return ofi;
+rpmps rpmSpecCheckDeps(rpmts ts, rpmSpec spec)
+{
+    rpmps probs = NULL;
+
+    rpmtsEmpty(ts);
+
+    rpmtsAddInstallElement(ts, rpmSpecSourceHeader(spec), NULL, 0, NULL);
+    rpmtsCheck(ts);
+    probs = rpmtsProblems(ts);
+
+    rpmtsEmpty(ts);
+    return probs;
+}
+
+struct rpmSpecIter_s {
+    void *next;
+};
+
+#define SPEC_LISTITER_INIT(_itertype, _iteritem)	\
+    _itertype iter = NULL;				\
+    if (spec) {						\
+	iter = xcalloc(1, sizeof(*iter));		\
+	iter->next = spec->_iteritem;			\
+    }							\
+    return iter
+
+#define SPEC_LISTITER_NEXT(_valuetype)			\
+    _valuetype item = NULL;				\
+    if (iter) {						\
+	item = iter->next;				\
+	iter->next = (item) ? item->next : NULL;	\
+    }							\
+    return item
+
+#define SPEC_LISTITER_FREE()				\
+    free(iter);						\
+    return NULL
+
+
+rpmSpecPkgIter rpmSpecPkgIterInit(rpmSpec spec)
+{
+    SPEC_LISTITER_INIT(rpmSpecPkgIter, packages);
+}
+
+rpmSpecPkgIter rpmSpecPkgIterFree(rpmSpecPkgIter iter)
+{
+    SPEC_LISTITER_FREE();
+}
+
+rpmSpecPkg rpmSpecPkgIterNext(rpmSpecPkgIter iter)
+{
+    SPEC_LISTITER_NEXT(rpmSpecPkg);
+}
+
+Header rpmSpecPkgHeader(rpmSpecPkg pkg)
+{
+    return (pkg != NULL) ? pkg->header : NULL;
+}
+
+rpmSpecSrcIter rpmSpecSrcIterInit(rpmSpec spec)
+{
+    SPEC_LISTITER_INIT(rpmSpecSrcIter, sources);
+}
+
+rpmSpecSrcIter rpmSpecSrcIterFree(rpmSpecSrcIter iter)
+{
+    SPEC_LISTITER_FREE();
+}
+
+rpmSpecSrc rpmSpecSrcIterNext(rpmSpecSrcIter iter)
+{
+    SPEC_LISTITER_NEXT(rpmSpecSrc);
+}
+
+rpmSourceFlags rpmSpecSrcFlags(rpmSpecSrc src)
+{
+    return (src != NULL) ? src->flags : 0;
+}
+
+int rpmSpecSrcNum(rpmSpecSrc src)
+{
+    return (src != NULL) ? src->num : -1;
+}
+
+const char * rpmSpecSrcFilename(rpmSpecSrc src, int full)
+{
+    const char *source = NULL;
+    if (src) {
+	source = full ? src->fullSource : src->source;
+    }
+    return source;
+}
+
+const char * rpmSpecGetSection(rpmSpec spec, int section)
+{
+    if (spec) {
+	switch (section) {
+	case RPMBUILD_NONE:	return getStringBuf(spec->parsed);
+	case RPMBUILD_PREP:	return getStringBuf(spec->prep);
+	case RPMBUILD_BUILD:	return getStringBuf(spec->build);
+	case RPMBUILD_INSTALL:	return getStringBuf(spec->install);
+	case RPMBUILD_CHECK:	return getStringBuf(spec->check);
+	case RPMBUILD_CLEAN:	return getStringBuf(spec->clean);
+	}
+    }
+    return NULL;
 }
 
 int rpmspecQuery(rpmts ts, QVA_t qva, const char * arg)
 {
     rpmSpec spec = NULL;
-    Package pkg;
-    char * buildRoot = NULL;
-    int recursing = 0;
-    char * passPhrase = "";
-    char *cookie = NULL;
-    int anyarch = 1;
-    int force = 1;
     int res = 1;
-    int xx;
 
     if (qva->qva_showPackage == NULL)
 	goto exit;
 
-    /* FIX: make spec abstract */
-    if (parseSpec(ts, arg, "/", buildRoot, recursing, passPhrase,
-		cookie, anyarch, force)
-      || (spec = rpmtsSetSpec(ts, NULL)) == NULL)
-    {
+    spec = rpmSpecParse(arg, (RPMSPEC_ANYARCH|RPMSPEC_FORCE), NULL);
+    if (spec == NULL) {
 	rpmlog(RPMLOG_ERR,
 	    		_("query of specfile %s failed, can't parse\n"), arg);
 	goto exit;
     }
 
-    res = 0;
-    for (pkg = spec->packages; pkg != NULL; pkg = pkg->next)
-	xx = qva->qva_showPackage(qva, ts, pkg->header);
+    if (qva->qva_source == RPMQV_SPECRPMS) {
+	res = 0;
+	for (Package pkg = spec->packages; pkg != NULL; pkg = pkg->next) {
+#if 0
+	    /*
+	     * XXX FIXME: whether to show all or just the packages that
+	     * would be built needs to be made caller specifiable, for now
+	     * revert to "traditional" behavior as existing tools rely on this.
+	     */
+	    if (pkg->fileList == NULL) continue;
+#endif
+	    res += qva->qva_showPackage(qva, ts, pkg->header);
+	}
+    } else {
+	res = qva->qva_showPackage(qva, ts, spec->sourceHeader);
+    }
 
 exit:
-    spec = freeSpec(spec);
+    rpmSpecFree(spec);
     return res;
 }

@@ -13,7 +13,16 @@
 
 #endif
 
+#if defined(HAVE_MMAP)
+#include <sys/mman.h>
+#endif
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <errno.h>
 #include <popt.h>
+#include <ctype.h>
 
 #include <rpm/rpmfileutil.h>
 #include <rpm/rpmurl.h>
@@ -125,7 +134,7 @@ exit:
     return fdno;
 }
 
-int rpmDoDigest(pgpHashAlgo algo, const char * fn,int asAscii,
+int rpmDoDigest(int algo, const char * fn,int asAscii,
                 unsigned char * digest, rpm_loff_t * fsizep)
 {
     const char * path;
@@ -155,12 +164,13 @@ int rpmDoDigest(pgpHashAlgo algo, const char * fn,int asAscii,
     case URL_IS_UNKNOWN:
 #ifdef HAVE_MMAP
       if (pid == 0) {
+	int xx;
 	DIGEST_CTX ctx;
 	void * mapped;
 
 	if (fsize) {
 	    mapped = mmap(NULL, fsize, PROT_READ, MAP_SHARED, fdno, 0);
-	    if (mapped == (void *)-1) {
+	    if (mapped == MAP_FAILED) {
 		xx = close(fdno);
 		rc = 1;
 		break;
@@ -229,10 +239,14 @@ exit:
 
 FD_t rpmMkTemp(char *templ)
 {
+    mode_t mode;
     int sfd;
     FD_t tfd = NULL;
 
+    mode = umask(0077);
     sfd = mkstemp(templ);
+    umask(mode);
+
     if (sfd < 0) {
 	goto exit;
     }
@@ -352,14 +366,21 @@ int rpmFileIsCompressed(const char * file, rpmCompressedMagic * compressed)
 
     if ((magic[0] == 'B') && (magic[1] == 'Z')) {
 	*compressed = COMPRESSED_BZIP2;
-    } else if ((magic[0] == 0120) && (magic[1] == 0113) &&
-	 (magic[2] == 0003) && (magic[3] == 0004)) {	/* pkzip */
+    } else if ((magic[0] == 'P') && (magic[1] == 'K') &&
+	 (((magic[2] == 3) && (magic[3] == 4)) ||
+	  ((magic[2] == '0') && (magic[3] == '0')))) {	/* pkzip */
 	*compressed = COMPRESSED_ZIP;
     } else if ((magic[0] == 0xfd) && (magic[1] == 0x37) &&
 	       (magic[2] == 0x7a) && (magic[3] == 0x58) &&
 	       (magic[4] == 0x5a) && (magic[5] == 0x00)) {
 	/* new style xz (lzma) with magic */
 	*compressed = COMPRESSED_XZ;
+    } else if ((magic[0] == 'L') && (magic[1] == 'Z') &&
+	       (magic[2] == 'I') && (magic[3] == 'P')) {
+	*compressed = COMPRESSED_LZIP;
+    } else if ((magic[0] == 'L') && (magic[1] == 'R') &&
+	       (magic[2] == 'Z') && (magic[3] == 'I')) {
+	*compressed = COMPRESSED_LRZIP;
     } else if (((magic[0] == 0037) && (magic[1] == 0213)) || /* gzip */
 	((magic[0] == 0037) && (magic[1] == 0236)) ||	/* old gzip */
 	((magic[0] == 0037) && (magic[1] == 0036)) ||	/* pack */
@@ -367,6 +388,10 @@ int rpmFileIsCompressed(const char * file, rpmCompressedMagic * compressed)
 	((magic[0] == 0037) && (magic[1] == 0235))	/* compress */
 	) {
 	*compressed = COMPRESSED_OTHER;
+    } else if ((magic[0] == '7') && (magic[1] == 'z') &&
+               (magic[2] == 0xbc) && (magic[3] == 0xaf) &&
+               (magic[4] == 0x27) && (magic[5] == 0x1c)) {
+	*compressed = COMPRESSED_7ZIP;
     } else if (rpmFileHasSuffix(file, ".lzma")) {
 	*compressed = COMPRESSED_LZMA;
     }
@@ -513,9 +538,9 @@ char * rpmGenPath(const char * urlroot, const char * urlmdir,
 
     result = rpmGetPath(url, root, "/", mdir, "/", file, NULL);
 
-    xroot = _free(xroot);
-    xmdir = _free(xmdir);
-    xfile = _free(xfile);
+    free(xroot);
+    free(xmdir);
+    free(xfile);
     free(url);
     return result;
 }
@@ -586,17 +611,25 @@ int rpmGlob(const char * patterns, int * argcPtr, ARGV_t * argvPtr)
 	const char * path;
 	int ut = urlPath(av[j], &path);
 	int local = (ut == URL_IS_PATH) || (ut == URL_IS_UNKNOWN);
+	size_t plen = strlen(path);
+	int flags = gflags;
+	int dir_only = (plen > 0 && path[plen-1] == '/');
 	glob_t gl;
 
 	if (!local || (!glob_pattern_p(av[j], 0) && strchr(path, '~') == NULL)) {
 	    argvAdd(&argv, av[j]);
 	    continue;
 	}
+
+#ifdef GLOB_ONLYDIR
+	if (dir_only)
+	    flags |= GLOB_ONLYDIR;
+#endif
 	
 	gl.gl_pathc = 0;
 	gl.gl_pathv = NULL;
 	
-	rc = glob(av[j], gflags, NULL, &gl);
+	rc = glob(av[j], flags, NULL, &gl);
 	if (rc)
 	    goto exit;
 
@@ -630,13 +663,20 @@ int rpmGlob(const char * patterns, int * argcPtr, ARGV_t * argvPtr)
 
 	for (i = 0; i < gl.gl_pathc; i++) {
 	    const char * globFile = &(gl.gl_pathv[i][0]);
+
+	    if (dir_only) {
+		struct stat sb;
+		if (lstat(gl.gl_pathv[i], &sb) || !S_ISDIR(sb.st_mode))
+		    continue;
+	    }
+		
 	    if (globRoot > globURL && globRoot[-1] == '/')
 		while (*globFile == '/') globFile++;
 	    strcpy(globRoot, globFile);
 	    argvAdd(&argv, globURL);
 	}
 	globfree(&gl);
-	globURL = _free(globURL);
+	free(globURL);
     }
 
     argc = argvCount(argv);
@@ -654,11 +694,11 @@ exit:
 #ifdef ENABLE_NLS	
     if (old_collate) {
 	(void) setlocale(LC_COLLATE, old_collate);
-	old_collate = _free(old_collate);
+	free(old_collate);
     }
     if (old_ctype) {
 	(void) setlocale(LC_CTYPE, old_ctype);
-	old_ctype = _free(old_ctype);
+	free(old_ctype);
     }
 #endif
     av = _free(av);

@@ -4,6 +4,12 @@
 
 #include "system.h"
 #include <stdarg.h>
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#else
+extern char *optarg;
+extern int optind;
+#endif
 
 #if !defined(isblank)
 #define	isblank(_c)	((_c) == ' ' || (_c) == '\t')
@@ -56,18 +62,14 @@ rpmMacroContext rpmCLIMacroContext = &rpmCLIMacroContext_s;
  * Macro expansion state.
  */
 typedef struct MacroBuf_s {
-    const char * s;		/*!< Text to expand. */
-    char * t;			/*!< Expansion buffer. */
+    char * buf;			/*!< Expansion buffer. */
+    size_t tpos;		/*!< Current position in expansion buffer */
     size_t nb;			/*!< No. bytes remaining in expansion buffer. */
     int depth;			/*!< Current expansion depth. */
     int macro_trace;		/*!< Pre-print macro to expand? */
     int expand_trace;		/*!< Post-print macro expansion? */
-    void * spec;		/*!< (future) %file expansion info?. */
     rpmMacroContext mc;
 } * MacroBuf;
-
-#define SAVECHAR(_mb, _c) { *(_mb)->t = (_c), (_mb)->t++, (_mb)->nb--; }
-
 
 #define	_MAX_MACRO_DEPTH	16
 static int max_macro_depth = _MAX_MACRO_DEPTH;
@@ -81,7 +83,7 @@ static int print_expand_trace = _PRINT_EXPAND_TRACE;
 #define	MACRO_CHUNK_SIZE	16
 
 /* forward ref */
-static int expandMacro(MacroBuf mb);
+static int expandMacro(MacroBuf mb, const char *src, size_t slen);
 
 /* =============================================================== */
 
@@ -196,25 +198,24 @@ findEntry(rpmMacroContext mc, const char * name, size_t namelen)
 {
     rpmMacroEntry key, *ret;
     struct rpmMacroEntry_s keybuf;
-    char *namebuf = NULL;
+    char namebuf[namelen+1];
+    const char *mname = name;
 
     if (mc == NULL) mc = rpmGlobalMacroContext;
     if (mc->macroTable == NULL || mc->firstFree == 0)
 	return NULL;
 
     if (namelen > 0) {
-	namebuf = xcalloc(namelen + 1, sizeof(*namebuf));
 	strncpy(namebuf, name, namelen);
 	namebuf[namelen] = '\0';
-	name = namebuf;
+	mname = namebuf;
     }
     
     key = &keybuf;
     memset(key, 0, sizeof(*key));
-    key->name = (char *)name;
+    key->name = (char *)mname;
     ret = (rpmMacroEntry *) bsearch(&key, mc->macroTable, mc->firstFree,
 			sizeof(*(mc->macroTable)), compareMacroName);
-    _free(namebuf);
     /* XXX TODO: find 1st empty slot and return that */
     return ret;
 }
@@ -360,7 +361,7 @@ printExpansion(MacroBuf mb, const char * t, const char * te)
     int choplen;
 
     if (!(te > t)) {
-	fprintf(stderr, _("%3d<%*s(empty)\n"), mb->depth, (2 * mb->depth + 1), "");
+	rpmlog(RPMLOG_DEBUG, _("%3d<%*s(empty)\n"), mb->depth, (2 * mb->depth + 1), "");
 	return;
     }
 
@@ -383,10 +384,10 @@ printExpansion(MacroBuf mb, const char * t, const char * te)
 	}
     }
 
-    fprintf(stderr, "%3d<%*s", mb->depth, (2 * mb->depth + 1), "");
+    rpmlog(RPMLOG_DEBUG,"%3d<%*s", mb->depth, (2 * mb->depth + 1), "");
     if (te > t)
-	fprintf(stderr, "%.*s%s", (int)(te - t), t, ellipsis);
-    fprintf(stderr, "\n");
+	rpmlog(RPMLOG_DEBUG, "%.*s%s", (int)(te - t), t, ellipsis);
+    rpmlog(RPMLOG_DEBUG, "\n");
 }
 
 #define	SKIPBLANK(_s, _c)	\
@@ -412,68 +413,49 @@ printExpansion(MacroBuf mb, const char * t, const char * te)
     }
 
 /**
- * Save source and expand field into target.
+ * Macro-expand string src, return result in dynamically allocated buffer.
  * @param mb		macro expansion state
- * @param f		field
- * @param flen		no. bytes in field
+ * @param src		string to expand
+ * @param slen		input string length (or 0 for strlen())
+ * @retval target	pointer to expanded string (malloced)
  * @return		result of expansion
  */
 static int
-expandT(MacroBuf mb, const char * f, size_t flen)
+expandThis(MacroBuf mb, const char * src, size_t slen, char **target)
 {
-    char *sbuf;
-    const char *s = mb->s;
+    struct MacroBuf_s umb;
     int rc;
 
-    sbuf = xcalloc(flen + 1, sizeof(*sbuf));
-
-    strncpy(sbuf, f, flen);
-    sbuf[flen] = '\0';
-    mb->s = sbuf;
-    rc = expandMacro(mb);
-    mb->s = s;
-
-    _free(sbuf);
+    /* Copy other state from "parent", but we want a buffer of our own */
+    umb = *mb;
+    umb.buf = NULL;
+    rc = expandMacro(&umb, src, slen);
+    *target = umb.buf;
 
     return rc;
 }
 
-/**
- * Save source/target and expand macro in u.
- * @param mb		macro expansion state
- * @param u		input macro, output expansion
- * @param ulen		no. bytes in u buffer
- * @return		result of expansion
- */
-static int
-expandU(MacroBuf mb, char * u, size_t ulen)
+static void mbAppend(MacroBuf mb, char c)
 {
-    const char *s = mb->s;
-    char *t = mb->t;
-    size_t nb = mb->nb;
-    char *tbuf;
-    int rc;
-
-    tbuf = xcalloc(ulen + 1, sizeof(*tbuf));
-
-    mb->s = u;
-    mb->t = tbuf;
-    mb->nb = ulen;
-    rc = expandMacro(mb);
-
-    tbuf[ulen] = '\0';	/* XXX just in case */
-    if (ulen > mb->nb)
-	strncpy(u, tbuf, (ulen - mb->nb + 1));
-
-    mb->s = s;
-    mb->t = t;
-    mb->nb = nb;
-
-    _free(tbuf);
-
-    return rc;
+    if (mb->nb < 1) {
+	mb->buf = xrealloc(mb->buf, mb->tpos + MACROBUFSIZ + 1);
+	mb->nb += MACROBUFSIZ;
+    }
+    mb->buf[mb->tpos++] = c;
+    mb->nb--;
 }
 
+static void mbAppendStr(MacroBuf mb, const char *str)
+{
+    size_t len = strlen(str);
+    if (len > mb->nb) {
+	mb->buf = xrealloc(mb->buf, mb->tpos + mb->nb + MACROBUFSIZ + len + 1);
+	mb->nb += MACROBUFSIZ + len;
+    }
+    memcpy(mb->buf+mb->tpos, str, len);
+    mb->tpos += len;
+    mb->nb -= len;
+}
 /**
  * Expand output of shell command into target buffer.
  * @param mb		macro expansion state
@@ -484,15 +466,12 @@ expandU(MacroBuf mb, char * u, size_t ulen)
 static int
 doShellEscape(MacroBuf mb, const char * cmd, size_t clen)
 {
-    size_t blen = MACROBUFSIZ + clen;
-    char *buf = xmalloc(blen);
+    char *buf = NULL;
     FILE *shf;
     int rc = 0;
     int c;
 
-    strncpy(buf, cmd, clen);
-    buf[clen] = '\0';
-    rc = expandU(mb, buf, blen);
+    rc = expandThis(mb, cmd, clen, &buf);
     if (rc)
 	goto exit;
 
@@ -501,15 +480,13 @@ doShellEscape(MacroBuf mb, const char * cmd, size_t clen)
 	goto exit;
     }
     while((c = fgetc(shf)) != EOF) {
-	if (mb->nb > 1) {
-	    SAVECHAR(mb, c);
-	} 
+	mbAppend(mb, c);
     }
     (void) pclose(shf);
 
     /* XXX delete trailing \r \n */
-    while (iseol(mb->t[-1])) {
-	*(mb->t--) = '\0';
+    while (iseol(mb->buf[mb->tpos-1])) {
+	mb->buf[mb->tpos--] = '\0';
 	mb->nb++;
     }
 
@@ -534,7 +511,7 @@ doDefine(MacroBuf mb, const char * se, int level, int expandbody)
     char *buf = xmalloc(blen);
     char *n = buf, *ne = n;
     char *o = NULL, *oe;
-    char *b, *be;
+    char *b, *be, *ebody = NULL;
     int c;
     int oc = ')';
 
@@ -558,7 +535,7 @@ doDefine(MacroBuf mb, const char * se, int level, int expandbody)
 	    rpmlog(RPMLOG_ERR,
 		_("Macro %%%s has unterminated body\n"), n);
 	    se = s;	/* XXX W2DO? */
-	    return se;
+	    goto exit;
 	}
 	s++;	/* XXX skip { */
 	strncpy(b, s, (se - s));
@@ -596,7 +573,7 @@ doDefine(MacroBuf mb, const char * se, int level, int expandbody)
 	    rpmlog(RPMLOG_ERR,
 		_("Macro %%%s has unterminated body\n"), n);
 	    se = s;	/* XXX W2DO? */
-	    return se;
+	    goto exit;
 	}
 
 	/* Trim trailing blanks/newlines */
@@ -614,7 +591,7 @@ doDefine(MacroBuf mb, const char * se, int level, int expandbody)
     if (!((c = *n) && (risalpha(c) || c == '_') && (ne - n) > 2)) {
 	rpmlog(RPMLOG_ERR,
 		_("Macro %%%s has illegal name (%%define)\n"), n);
-	return se;
+	goto exit;
     }
 
     /* Options must be terminated with ')' */
@@ -628,15 +605,19 @@ doDefine(MacroBuf mb, const char * se, int level, int expandbody)
 	goto exit;
     }
 
-    if (expandbody && expandU(mb, b, (&buf[blen] - b))) {
-	rpmlog(RPMLOG_ERR, _("Macro %%%s failed to expand\n"), n);
-	goto exit;
+    if (expandbody) {
+	if (expandThis(mb, b, 0, &ebody)) {
+	    rpmlog(RPMLOG_ERR, _("Macro %%%s failed to expand\n"), n);
+	    goto exit;
+	}
+	b = ebody;
     }
 
     addMacro(mb->mc, n, o, b, (level - 1));
 
 exit:
     _free(buf);
+    _free(ebody);
     return se;
 }
 
@@ -710,16 +691,21 @@ pushMacro(rpmMacroEntry * mep,
 static void
 popMacro(rpmMacroEntry * mep)
 {
-	rpmMacroEntry me = (*mep ? *mep : NULL);
+    if (mep && *mep) {
+	rpmMacroEntry me = *mep;
 
-	if (me) {
-		/* XXX cast to workaround const */
-		if ((*mep = me->prev) == NULL)
-			me->name = _free(me->name);
-		me->opts = _free(me->opts);
-		me->body = _free(me->body);
-		me = _free(me);
-	}
+	/* restore previous definition of the macro */
+	*mep = me->prev;
+
+	/* name is shared between entries, only free if last of its kind */
+	if (me->prev == NULL)
+	    free(me->name);
+	free(me->opts);
+	free(me->body);
+
+	memset(me, 0, sizeof(*me)); /* trash and burn */
+	free(me);
+    }
 }
 
 /**
@@ -894,12 +880,9 @@ exit:
 static void
 doOutput(MacroBuf mb, int waserror, const char * msg, size_t msglen)
 {
-    size_t blen = MACROBUFSIZ + msglen;
-    char *buf = xmalloc(blen);
+    char *buf = NULL;
 
-    strncpy(buf, msg, msglen);
-    buf[msglen] = '\0';
-    (void) expandU(mb, buf, blen);
+    (void) expandThis(mb, msg, msglen, &buf);
     if (waserror)
 	rpmlog(RPMLOG_ERR, "%s\n", buf);
     else
@@ -920,16 +903,15 @@ static void
 doFoo(MacroBuf mb, int negate, const char * f, size_t fn,
 		const char * g, size_t gn)
 {
-    size_t blen = MACROBUFSIZ + fn + gn;
-    char *buf = xmalloc(blen);
+    char *buf = NULL;
     char *b = NULL, *be;
     int c;
 
-    buf[0] = '\0';
     if (g != NULL) {
-	strncpy(buf, g, gn);
-	buf[gn] = '\0';
-	(void) expandU(mb, buf, blen);
+	(void) expandThis(mb, g, gn, &buf);
+    } else {
+	buf = xmalloc(MACROBUFSIZ + fn + gn);
+	buf[0] = '\0';
     }
     if (STREQ("basename", f, fn)) {
 	if ((b = strrchr(buf, '/')) == NULL)
@@ -982,6 +964,15 @@ doFoo(MacroBuf mb, int negate, const char * f, size_t fn,
         case COMPRESSED_XZ:
             sprintf(be, "%%__xz -dc %s", b);
             break;
+	case COMPRESSED_LZIP:
+	    sprintf(be, "%%__lzip -dc %s", b);
+	    break;
+	case COMPRESSED_LRZIP:
+	    sprintf(be, "%%__lrzip -dqo- %s", b);
+	    break;
+	case COMPRESSED_7ZIP:
+	    sprintf(be, "%%__7zip x %s", b);
+	    break;
 	}
 	b = be;
     } else if (STREQ("getenv", f, fn)) {
@@ -1011,43 +1002,59 @@ doFoo(MacroBuf mb, int negate, const char * f, size_t fn,
     }
 
     if (b) {
-	(void) expandT(mb, b, strlen(b));
+	(void) expandMacro(mb, b, 0);
     }
     free(buf);
 }
 
 /**
  * The main macro recursion loop.
- * @todo Dynamically reallocate target buffer.
  * @param mb		macro expansion state
+ * @param src		string to expand
  * @return		0 on success, 1 on failure
  */
 static int
-expandMacro(MacroBuf mb)
+expandMacro(MacroBuf mb, const char *src, size_t slen)
 {
     rpmMacroEntry *mep;
     rpmMacroEntry me;
-    const char *s = mb->s, *se;
+    const char *s = src, *se;
     const char *f, *fe;
     const char *g, *ge;
-    size_t fn, gn;
-    char *t = mb->t;	/* save expansion pointer for printExpand */
+    size_t fn, gn, tpos;
     int c;
     int rc = 0;
     int negate;
     const char * lastc;
     int chkexist;
+    char *source = NULL;
+
+    /* Handle non-terminated substrings by creating a terminated copy */
+    if (!slen)
+	slen = strlen(src);
+    source = xmalloc(slen + 1);
+    strncpy(source, src, slen);
+    source[slen] = '\0';
+    s = source;
+
+    if (mb->buf == NULL) {
+	size_t blen = MACROBUFSIZ + strlen(s);
+	mb->buf = xcalloc(blen + 1, sizeof(*mb->buf));
+	mb->tpos = 0;
+	mb->nb = blen;
+    }
+    tpos = mb->tpos; /* save expansion pointer for printExpand */
 
     if (++mb->depth > max_macro_depth) {
 	rpmlog(RPMLOG_ERR,
-		_("Recursion depth(%d) greater than max(%d)\n"),
-		mb->depth, max_macro_depth);
+		_("Too many levels of recursion in macro expansion. It is likely caused by recursive macro declaration.\n"));
 	mb->depth--;
 	mb->expand_trace = 1;
+	_free(source);
 	return 1;
     }
 
-    while (rc == 0 && mb->nb > 0 && (c = *s) != '\0') {
+    while (rc == 0 && (c = *s) != '\0') {
 	s++;
 	/* Copy text until next macro */
 	switch(c) {
@@ -1058,7 +1065,7 @@ expandMacro(MacroBuf mb)
 		    s++;	/* skip first % in %% */
 		}
 	default:
-		SAVECHAR(mb, c);
+		mbAppend(mb, c);
 		continue;
 		break;
 	}
@@ -1067,7 +1074,7 @@ expandMacro(MacroBuf mb)
 	f = fe = NULL;
 	g = ge = NULL;
 	if (mb->depth > 1)	/* XXX full expansion for outermost level */
-		t = mb->t;	/* save expansion pointer for printExpand */
+	    tpos = mb->tpos;	/* save expansion pointer for printExpand */
 	negate = 0;
 	lastc = NULL;
 	chkexist = 0;
@@ -1164,7 +1171,7 @@ expandMacro(MacroBuf mb)
 	if ((fe - f) <= 0) {
 /* XXX Process % in unknown context */
 		c = '%';	/* XXX only need to save % */
-		SAVECHAR(mb, c);
+		mbAppend(mb, c);
 #if 0
 		rpmlog(RPMLOG_ERR,
 			_("A %% is followed by an unparseable macro\n"));
@@ -1229,22 +1236,17 @@ expandMacro(MacroBuf mb)
 		const char *ls = s+sizeof("{lua:")-1;
 		const char *lse = se-sizeof("}")+1;
 		char *scriptbuf = (char *)xmalloc((lse-ls)+1);
-		const char *printbuf;
+		char *printbuf;
 		memcpy(scriptbuf, ls, lse-ls);
 		scriptbuf[lse-ls] = '\0';
-		rpmluaSetPrintBuffer(lua, 1);
+		rpmluaPushPrintBuffer(lua);
 		if (rpmluaRunScript(lua, scriptbuf, NULL) == -1)
 		    rc = 1;
-		printbuf = rpmluaGetPrintBuffer(lua);
+		printbuf = rpmluaPopPrintBuffer(lua);
 		if (printbuf) {
-		    size_t len = strlen(printbuf);
-		    if (len > mb->nb)
-			len = mb->nb;
-		    memcpy(mb->t, printbuf, len);
-		    mb->t += len;
-		    mb->nb -= len;
+		    mbAppendStr(mb, printbuf);
+		    free(printbuf);
 		}
-		rpmluaSetPrintBuffer(lua, 0);
 		free(scriptbuf);
 		s = se;
 		continue;
@@ -1285,10 +1287,10 @@ expandMacro(MacroBuf mb)
 		}
 
 		if (g && g < ge) {		/* Expand X in %{-f:X} */
-			rc = expandT(mb, g, gn);
+			rc = expandMacro(mb, g, gn);
 		} else
 		if (me && me->body && *me->body) {/* Expand %{-f}/%{-f*} */
-			rc = expandT(mb, me->body, strlen(me->body));
+			rc = expandMacro(mb, me->body, 0);
 		}
 		s = se;
 		continue;
@@ -1302,32 +1304,19 @@ expandMacro(MacroBuf mb)
 			continue;
 		}
 		if (g && g < ge) {		/* Expand X in %{?f:X} */
-			rc = expandT(mb, g, gn);
+			rc = expandMacro(mb, g, gn);
 		} else
 		if (me && me->body && *me->body) { /* Expand %{?f}/%{?f*} */
-			rc = expandT(mb, me->body, strlen(me->body));
+			rc = expandMacro(mb, me->body, 0);
 		}
 		s = se;
 		continue;
 	}
 	
 	if (me == NULL) {	/* leave unknown %... as is */
-#ifndef HACK
-#if DEAD
-		/* XXX hack to skip over empty arg list */
-		if (fn == 1 && *f == '*') {
-			s = se;
-			continue;
-		}
-#endif
 		/* XXX hack to permit non-overloaded %foo to be passed */
 		c = '%';	/* XXX only need to save % */
-		SAVECHAR(mb, c);
-#else
-		rpmlog(RPMLOG_ERR,
-			_("Macro %%%.*s not found, skipping\n"), fn, f);
-		s = se;
-#endif
+		mbAppend(mb, c);
 		continue;
 	}
 
@@ -1345,8 +1334,7 @@ expandMacro(MacroBuf mb)
 
 	/* Recursively expand body of macro */
 	if (me->body && *me->body) {
-		mb->s = me->body;
-		rc = expandMacro(mb);
+		rc = expandMacro(mb, me->body, 0);
 		if (rc == 0)
 			me->used++;	/* Mark macro as used */
 	}
@@ -1358,52 +1346,46 @@ expandMacro(MacroBuf mb)
 	s = se;
     }
 
-    *mb->t = '\0';
-    mb->s = s;
+    mb->buf[mb->tpos] = '\0';
     mb->depth--;
     if (rc != 0 || mb->expand_trace)
-	printExpansion(mb, t, mb->t);
+	printExpansion(mb, mb->buf+tpos, mb->buf+mb->tpos);
+    _free(source);
     return rc;
 }
 
 
 /* =============================================================== */
 
-int
-expandMacros(void * spec, rpmMacroContext mc, char * sbuf, size_t slen)
+static int doExpandMacros(rpmMacroContext mc, const char *src, char **target)
 {
     MacroBuf mb = xcalloc(1, sizeof(*mb));
-    char *tbuf = NULL;
     int rc = 0;
-
-    if (sbuf == NULL || slen == 0) 
-	goto exit;
 
     if (mc == NULL) mc = rpmGlobalMacroContext;
 
-    tbuf = xcalloc(slen + 1, sizeof(*tbuf));
-
-    mb->s = sbuf;
-    mb->t = tbuf;
-    mb->nb = slen;
+    mb->buf = NULL;
     mb->depth = 0;
     mb->macro_trace = print_macro_trace;
     mb->expand_trace = print_expand_trace;
-
-    mb->spec = spec;	/* (future) %file expansion info */
     mb->mc = mc;
 
-    rc = expandMacro(mb);
+    rc = expandMacro(mb, src, 0);
 
-    if (mb->nb == 0)
-	rpmlog(RPMLOG_ERR, _("Target buffer overflow\n"));
+    mb->buf[mb->tpos] = '\0';	/* XXX just in case */
+    /* expanded output is usually much less than alloced buffer, downsize */
+    *target = xrealloc(mb->buf, mb->tpos + 1);
 
-    tbuf[slen] = '\0';	/* XXX just in case */
-    strncpy(sbuf, tbuf, (slen - mb->nb + 1));
-
-exit:
     _free(mb);
-    _free(tbuf);
+    return rc;
+}
+
+int expandMacros(void * spec, rpmMacroContext mc, char * sbuf, size_t slen)
+{
+    char *target = NULL;
+    int rc = doExpandMacros(mc, sbuf, &target);
+    rstrlcpy(sbuf, target, slen);
+    free(target);
     return rc;
 }
 
@@ -1489,10 +1471,8 @@ rpmLoadMacroFile(rpmMacroContext mc, const char * fn)
     char *buf = xmalloc(blen);
     int rc = -1;
 
-    if (fd == NULL || ferror(fd)) {
-	if (fd) (void) fclose(fd);
+    if (fd == NULL)
 	goto exit;
-    }
 
     /* XXX Assume new fangled macro expansion */
     max_macro_depth = 16;
@@ -1557,19 +1537,12 @@ rpmFreeMacros(rpmMacroContext mc)
     if (mc == NULL) mc = rpmGlobalMacroContext;
 
     if (mc->macroTable != NULL) {
-	int i;
-	for (i = 0; i < mc->firstFree; i++) {
-	    rpmMacroEntry me;
-	    while ((me = mc->macroTable[i]) != NULL) {
-		/* XXX cast to workaround const */
-		if ((mc->macroTable[i] = me->prev) == NULL)
-		    me->name = _free(me->name);
-		me->opts = _free(me->opts);
-		me->body = _free(me->body);
-		me = _free(me);
+	for (int i = 0; i < mc->firstFree; i++) {
+	    while (mc->macroTable[i] != NULL) {
+		popMacro(&mc->macroTable[i]);
 	    }
 	}
-	mc->macroTable = _free(mc->macroTable);
+	free(mc->macroTable);
     }
     memset(mc, 0, sizeof(*mc));
 }
@@ -1577,18 +1550,18 @@ rpmFreeMacros(rpmMacroContext mc)
 char * 
 rpmExpand(const char *arg, ...)
 {
-    size_t blen = MACROBUFSIZ;
-    char *buf = NULL;
+    size_t blen = 0;
+    char *buf = NULL, *ret = NULL;
     char *pe;
     const char *s;
     va_list ap;
 
     if (arg == NULL) {
-	buf = xstrdup("");
+	ret = xstrdup("");
 	goto exit;
     }
 
-    /* precalculate unexpanded size on top of MACROBUFSIZ */
+    /* precalculate unexpanded size */
     va_start(ap, arg);
     for (s = arg; s != NULL; s = va_arg(ap, const char *))
 	blen += strlen(s);
@@ -1602,14 +1575,11 @@ rpmExpand(const char *arg, ...)
 	pe = stpcpy(pe, s);
     va_end(ap);
 
-    (void) expandMacros(NULL, NULL, buf, blen);
+    (void) doExpandMacros(NULL, buf, &ret);
 
-    /* expanded output is usually much less than alloced buffer, downsize */
-    blen = strlen(buf);
-    buf = xrealloc(buf, blen + 1);
-
+    free(buf);
 exit:
-    return buf;
+    return ret;
 }
 
 int
@@ -1634,7 +1604,7 @@ rpmExpandNumeric(const char *arg)
 	if (!(end && *end == '\0'))
 	    rc = 0;
     }
-    val = _free(val);
+    free(val);
 
     return rc;
 }

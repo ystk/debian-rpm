@@ -56,6 +56,13 @@ RPM_GNUC_INTERNAL
 HASHTYPE  HASHPREFIX(Free)( HASHTYPE ht);
 
 /**
+ * Remove all entries from the hash table.
+ * @param ht            pointer to hash table
+ */
+RPM_GNUC_INTERNAL
+void HASHPREFIX(Empty)(HASHTYPE ht);
+
+/**
  * Add item to hash table.
  * @param ht            pointer to hash table
  * @param key           key
@@ -68,8 +75,6 @@ void  HASHPREFIX(AddEntry)(HASHTYPE ht, HTKEYTYPE key
 #endif
 );
 
-#ifdef HTDATATYPE
-
 /**
  * Retrieve item from hash table.
  * @param ht            pointer to hash table
@@ -81,10 +86,11 @@ void  HASHPREFIX(AddEntry)(HASHTYPE ht, HTKEYTYPE key
  */
 RPM_GNUC_INTERNAL
 int  HASHPREFIX(GetEntry)(HASHTYPE ht, HTKEYTYPE key,
+#ifdef HTDATATYPE
 		HTDATATYPE** data,
 		int * dataCount,
-		HTKEYTYPE* tableKey);
 #endif
+		HTKEYTYPE* tableKey);
 
 /**
  * Check for key in hash table.
@@ -94,6 +100,41 @@ int  HASHPREFIX(GetEntry)(HASHTYPE ht, HTKEYTYPE key,
  */
 RPM_GNUC_INTERNAL
 int  HASHPREFIX(HasEntry)(HASHTYPE ht, HTKEYTYPE key);
+
+/**
+ * How many buckets are currently allocated (result is implementation 
+ * dependent)
+ * @param ht            pointer to hash table
+ * @result		number of buckets allocated
+ */
+RPM_GNUC_INTERNAL
+unsigned int HASHPREFIX(NumBuckets)(HASHTYPE ht);
+
+/**
+ * How many buckets are used (result is implementation dependent)
+ * @param ht            pointer to hash table
+ * @result		number of buckets used
+ */
+RPM_GNUC_INTERNAL
+unsigned int HASHPREFIX(UsedBuckets)(HASHTYPE ht);
+
+/**
+ * How many (unique) keys have been added to the hash table
+ * @param ht            pointer to hash table
+ * @result		number of unique keys
+ */
+RPM_GNUC_INTERNAL
+unsigned int HASHPREFIX(NumKeys)(HASHTYPE ht);
+
+#ifdef HTDATATYPE
+/**
+ * How many data entries have been added to the hash table
+ * @param ht            pointer to hash table
+ * @result		number of data entries
+ */
+RPM_GNUC_INTERNAL
+unsigned int HASHPREFIX(NumData)(HASHTYPE ht);
+#endif
 
 /**
  * Print statistics about the hash to stderr

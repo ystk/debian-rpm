@@ -15,8 +15,8 @@
 #include <rpm/rpmlog.h>
 #include <rpm/rpmurl.h>
 #include <rpm/rpmfileutil.h>
+#include <rpm/rpmbase64.h>
 #include "rpmio/rpmhook.h"
-#include "rpmio/base64.h"
 
 #define _RPMLUA_INTERNAL
 #include "rpmio/rpmlua.h"
@@ -30,6 +30,13 @@
 			(globalLuaState = rpmluaNew()) \
 			\
 	    )
+
+struct rpmluapb_s {
+    size_t alloced;
+    size_t used;
+    char *buf;
+    rpmluapb next;
+};
 
 static rpmlua globalLuaState = NULL;
 
@@ -53,6 +60,7 @@ rpmlua rpmluaNew()
 	{"posix", luaopen_posix},
 	{"rex", luaopen_rex},
 	{"rpm", luaopen_rpm},
+	{"os",	luaopen_rpm_os},
 	{NULL, NULL},
     };
     
@@ -79,7 +87,7 @@ rpmlua rpmluaNew()
     return lua;
 }
 
-void *rpmluaFree(rpmlua lua)
+rpmlua rpmluaFree(rpmlua lua)
 {
     if (lua) {
 	if (lua->L) lua_close(lua->L);
@@ -123,20 +131,31 @@ void *rpmluaGetData(rpmlua _lua, const char *key)
     return getdata(lua->L, key);
 }
 
-void rpmluaSetPrintBuffer(rpmlua _lua, int flag)
+void rpmluaPushPrintBuffer(rpmlua _lua)
 {
     INITSTATE(_lua, lua);
-    lua->storeprint = flag;
-    free(lua->printbuf);
-    lua->printbuf = NULL;
-    lua->printbufsize = 0;
-    lua->printbufused = 0;
+    rpmluapb prbuf = xcalloc(1, sizeof(*prbuf));
+    prbuf->buf = NULL;
+    prbuf->alloced = 0;
+    prbuf->used = 0;
+    prbuf->next = lua->printbuf;
+
+    lua->printbuf = prbuf;
 }
 
-const char *rpmluaGetPrintBuffer(rpmlua _lua)
+char *rpmluaPopPrintBuffer(rpmlua _lua)
 {
     INITSTATE(_lua, lua);
-    return lua->printbuf;
+    rpmluapb prbuf = lua->printbuf;
+    char *ret = NULL;
+
+    if (prbuf) {
+	ret = prbuf->buf;
+	lua->printbuf = prbuf->next;
+	free(prbuf);
+    }
+    
+    return ret;
 }
 
 static int pushvar(lua_State *L, rpmluavType type, void *value)
@@ -337,7 +356,7 @@ rpmluav rpmluavNew(void)
     return var;
 }
 
-void *rpmluavFree(rpmluav var)
+rpmluav rpmluavFree(rpmluav var)
 {
     free(var);
     return NULL;
@@ -577,7 +596,7 @@ static int rpm_b64encode(lua_State *L)
     if (lua_gettop(L) == 2)
 	linelen = luaL_checkinteger(L, 2);
     if (str && len) {
-	char *data = b64encode(str, len, linelen);
+	char *data = rpmBase64Encode(str, len, linelen);
 	lua_pushstring(L, data);
 	free(data);
     }
@@ -590,7 +609,7 @@ static int rpm_b64decode(lua_State *L)
     if (str) {
 	void *data = NULL;
 	size_t len = 0;
-	if (b64decode(str, &data, &len) == 0) {
+	if (rpmBase64Decode(str, &data, &len) == 0) {
 	    lua_pushlstring(L, data, len);
 	} else {
 	    lua_pushnil(L);
@@ -603,7 +622,9 @@ static int rpm_b64decode(lua_State *L)
 static int rpm_expand(lua_State *L)
 {
     const char *str = luaL_checkstring(L, 1);
-    lua_pushstring(L, rpmExpand(str, NULL));
+    char *val = rpmExpand(str, NULL);
+    lua_pushstring(L, val);
+    free(val);
     return 1;
 }
 
@@ -770,16 +791,17 @@ static int rpm_print (lua_State *L)
 	s = lua_tostring(L, -1);  /* get result */
 	if (s == NULL)
 	    return luaL_error(L, "`tostring' must return a string to `print'");
-	if (lua->storeprint) {
+	if (lua->printbuf) {
+	    rpmluapb prbuf = lua->printbuf;
 	    int sl = lua_strlen(L, -1);
-	    if (lua->printbufused+sl+1 > lua->printbufsize) {
-		lua->printbufsize += sl+512;
-		lua->printbuf = xrealloc(lua->printbuf, lua->printbufsize);
+	    if (prbuf->used+sl+1 > prbuf->alloced) {
+		prbuf->alloced += sl+512;
+		prbuf->buf = xrealloc(prbuf->buf, prbuf->alloced);
 	    }
 	    if (i > 1)
-		lua->printbuf[lua->printbufused++] = '\t';
-	    memcpy(lua->printbuf+lua->printbufused, s, sl+1);
-	    lua->printbufused += sl;
+		prbuf->buf[prbuf->used++] = '\t';
+	    memcpy(prbuf->buf+prbuf->used, s, sl+1);
+	    prbuf->used += sl;
 	} else {
 	    if (i > 1)
 		(void) fputs("\t", stdout);
@@ -787,14 +809,15 @@ static int rpm_print (lua_State *L)
 	}
 	lua_pop(L, 1);  /* pop result */
     }
-    if (!lua->storeprint) {
+    if (!lua->printbuf) {
 	(void) fputs("\n", stdout);
     } else {
-	if (lua->printbufused+1 > lua->printbufsize) {
-	    lua->printbufsize += 512;
-	    lua->printbuf = xrealloc(lua->printbuf, lua->printbufsize);
+	rpmluapb prbuf = lua->printbuf;
+	if (prbuf->used+1 > prbuf->alloced) {
+	    prbuf->alloced += 512;
+	    prbuf->buf = xrealloc(prbuf->buf, prbuf->alloced);
 	}
-	lua->printbuf[lua->printbufused] = '\0';
+	prbuf->buf[prbuf->used] = '\0';
     }
     return 0;
 }

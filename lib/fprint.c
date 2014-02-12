@@ -9,7 +9,7 @@
 #include "lib/rpmdb_internal.h"
 #include "lib/rpmfi_internal.h"
 #include "lib/fprint.h"
-#include "lib/rpmhash.h"
+#include "lib/misc.h"
 #include "debug.h"
 #include <libgen.h>
 
@@ -29,7 +29,7 @@ fingerPrintCache fpCacheCreate(int sizeHint)
     fingerPrintCache fpc;
 
     fpc = xmalloc(sizeof(*fpc));
-    fpc->ht = rpmFpEntryHashCreate(sizeHint, hashFunctionString, strcmp,
+    fpc->ht = rpmFpEntryHashCreate(sizeHint, rstrhash, strcmp,
 				   (rpmFpEntryHashFreeKey)free,
 				   (rpmFpEntryHashFreeData)free);
     return fpc;
@@ -61,14 +61,6 @@ static const struct fprintCacheEntry_s * cacheContainsDirectory(
     return NULL;
 }
 
-/**
- * Return finger print of a file path.
- * @param cache		pointer to fingerprint cache
- * @param dirName	leading directory name of path
- * @param baseName	file name of path
- * @param scareMemory
- * @return pointer to the finger print associated with a file path.
- */
 fingerPrint fpLookup(fingerPrintCache cache,
 		const char * dirName, const char * baseName, int scareMemory)
 {
@@ -195,8 +187,8 @@ unsigned int fpHashFunction(const fingerPrint * fp)
     unsigned int hash = 0;
     int j;
 
-    hash = hashFunctionString(fp->baseName);
-    if (fp->subDir) hash ^= hashFunctionString(fp->subDir);
+    hash = rstrhash(fp->baseName);
+    if (fp->subDir) hash ^= rstrhash(fp->subDir);
 
     hash ^= ((unsigned)fp->entry->dev);
     for (j=0; j<4; j++) hash ^= ((fp->entry->ino >> (8*j)) & 0xFF) << ((3-j)*8);
@@ -246,7 +238,7 @@ void fpLookupSubdir(rpmFpHash symlinks, rpmFpHash fphash, fingerPrintCache fpc, 
 
     struct rpmffi_s * recs;
     int numRecs;
-    int i, fiFX;
+    int i;
     fingerPrint *fp = rpmfiFpsIndex(fi, filenr);
     int symlinkcount = 0;
     struct rpmffi_s ffi = { p, filenr};
@@ -276,17 +268,9 @@ void fpLookupSubdir(rpmFpHash symlinks, rpmFpHash fphash, fingerPrintCache fpc, 
 		    &recs, &numRecs, NULL);
 
 	 for (i=0; i<numRecs; i++) {
-	      rpmfi foundfi;
-	      int filenr;
-	      char const *linktarget;
+	      rpmfi foundfi = rpmteFI(recs[i].p);
+	      char const *linktarget = rpmfiFLinkIndex(foundfi, recs[i].fileno);
 	      char *link;
-
-	      foundfi =  rpmteFI(recs[i].p);
-	      fiFX = rpmfiFX(foundfi);
-
-	      filenr = recs[i].fileno;
-	      rpmfiSetFX(foundfi, filenr);
-	      linktarget = rpmfiFLink(foundfi);
 
 	      if (linktarget && *linktarget != '\0') {
 		   /* this "directory" is a symlink */
@@ -330,7 +314,6 @@ void fpLookupSubdir(rpmFpHash symlinks, rpmFpHash fphash, fingerPrintCache fpc, 
 		   break;
 
 	      }
-	      rpmfiSetFX(foundfi, fiFX);
 	 }
 	 if (symlinkcount>50) {
 	      // found too many symlinks in the path

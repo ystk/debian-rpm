@@ -24,7 +24,11 @@
 
 # include "system.h"
 
+# include <stdlib.h>
+# include <string.h>
+# include <pwd.h>
 # include <assert.h>
+# include <sys/stat.h>		/* S_ISDIR */
 
 #define	__alloca	alloca
 #define	__stat		stat
@@ -1052,7 +1056,7 @@ glob_in_dir (const char *pattern, const char *directory, int flags,
 		  if (! REAL_DIR_ENTRY (d))
 		    continue;
 
-#ifdef HAVE_D_TYPE
+#ifdef HAVE_STRUCT_DIRENT_D_TYPE
 		  /* If we shall match only directories use the information
 		     provided by the dirent call if possible.  */
 		  if ((flags & GLOB_ONLYDIR)

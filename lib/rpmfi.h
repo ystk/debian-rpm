@@ -14,8 +14,6 @@
 extern "C" {
 #endif
 
-extern int _rpmfi_debug;
-
 /** \ingroup rpmfi
  * File types.
  * These are the file types used internally by rpm. The file
@@ -37,18 +35,20 @@ typedef enum rpmFileTypes_e {
  * File States (when installed).
  */
 typedef enum rpmfileState_e {
+    RPMFILE_STATE_MISSING	= -1,	/* used for unavailable data */
     RPMFILE_STATE_NORMAL 	= 0,
     RPMFILE_STATE_REPLACED 	= 1,
     RPMFILE_STATE_NOTINSTALLED	= 2,
     RPMFILE_STATE_NETSHARED	= 3,
     RPMFILE_STATE_WRONGCOLOR	= 4
 } rpmfileState;
-#define	RPMFILE_STATE_MISSING	-1	/* XXX used for unavailable data */
+
+#define RPMFILE_IS_INSTALLED(_x) ((_x) == RPMFILE_STATE_NORMAL || (_x) == RPMFILE_STATE_NETSHARED)
 
 /**
  * File Attributes.
  */
-typedef	enum rpmfileAttrs_e {
+enum rpmfileAttrs_e {
     RPMFILE_NONE	= 0,
     RPMFILE_CONFIG	= (1 <<  0),	/*!< from %%config */
     RPMFILE_DOC		= (1 <<  1),	/*!< from %%doc */
@@ -62,8 +62,9 @@ typedef	enum rpmfileAttrs_e {
     RPMFILE_EXCLUDE	= (1 <<  9),	/*!< from %%exclude, internal */
     RPMFILE_UNPATCHED	= (1 << 10),	/*!< placeholder (SuSE) */
     RPMFILE_PUBKEY	= (1 << 11),	/*!< from %%pubkey */
-    RPMFILE_POLICY	= (1 << 12)	/*!< from %%policy */
-} rpmfileAttrs;
+};
+
+typedef rpmFlags rpmfileAttrs;
 
 #define	RPMFILE_ALL	~(RPMFILE_NONE)
 
@@ -97,21 +98,11 @@ struct rpmRelocation_s {
 };
 
 /** \ingroup rpmfi
- * Unreference a file info set instance.
- * @param fi		file info set
- * @param msg
- * @return		NULL always
- */
-rpmfi rpmfiUnlink (rpmfi fi,
-		const char * msg);
-
-/** \ingroup rpmfi
  * Reference a file info set instance.
  * @param fi		file info set
- * @param msg
  * @return		new file info set reference
  */
-rpmfi rpmfiLink (rpmfi fi, const char * msg);
+rpmfi rpmfiLink (rpmfi fi);
 
 /** \ingroup rpmfi
  * Return file count from file info set.
@@ -211,7 +202,7 @@ rpmfileState rpmfiFState(rpmfi fi);
  * @param fi		file info set
  * @return		digest algorithm of file info set, 0 on invalid
  */
-pgpHashAlgo rpmfiDigestAlgo(rpmfi fi);
+int rpmfiDigestAlgo(rpmfi fi);
 
 /** \ingroup rpmfi
  * Return current file (binary) digest of file info set.
@@ -220,7 +211,7 @@ pgpHashAlgo rpmfiDigestAlgo(rpmfi fi);
  * @retval diglen	digest hash length (pass NULL to ignore)
  * @return		current file digest, NULL on invalid
  */
-const unsigned char * rpmfiFDigest(rpmfi fi, pgpHashAlgo *algo, size_t *diglen);
+const unsigned char * rpmfiFDigest(rpmfi fi, int *algo, size_t *diglen);
 
 /** \ingroup rpmfi
  * Return current file (hex) digest of file info set.
@@ -231,7 +222,7 @@ const unsigned char * rpmfiFDigest(rpmfi fi, pgpHashAlgo *algo, size_t *diglen);
  * @retval algo		digest hash algoritm used (pass NULL to ignore)
  * @return		current file digest (malloc'ed), NULL on invalid
  */
-char * rpmfiFDigestHex(rpmfi fi, pgpHashAlgo *algo);
+char * rpmfiFDigestHex(rpmfi fi, int *algo);
 
 /** \ingroup rpmfi
  * Return current file (binary) md5 digest from file info set.
@@ -380,7 +371,7 @@ rpmfi rpmfiInitD(rpmfi fi, int dx);
  */
 rpmfi rpmfiFree(rpmfi fi);
 
-typedef enum rpmfiFlags_e {
+enum rpmfiFlags_e {
     RPMFI_NOHEADER		= 0,
     RPMFI_KEEPHEADER		= (1 << 0),
     RPMFI_NOFILECLASS		= (1 << 1),
@@ -400,9 +391,9 @@ typedef enum rpmfiFlags_e {
     RPMFI_NOFILECOLORS		= (1 << 15),
     RPMFI_NOFILEVERIFYFLAGS	= (1 << 16),
     RPMFI_NOFILEFLAGS		= (1 << 17),
-    RPMFI_ISBUILD		= (1 << 30), 	/* internal */
-    RPMFI_ISSOURCE		= (1 << 31), 	/* internal */
-} rpmfiFlags;
+};
+
+typedef rpmFlags rpmfiFlags;
 
 #define RPMFI_FLAGS_ERASE \
     (RPMFI_NOFILECLASS | RPMFI_NOFILELANGS | \
@@ -428,7 +419,7 @@ typedef enum rpmfiFlags_e {
  * @param flags		Flags to control what information is loaded.
  * @return		new file info set
  */
-rpmfi rpmfiNew(const rpmts ts, Header h, rpmTag tagN, rpmfiFlags flags);
+rpmfi rpmfiNew(const rpmts ts, Header h, rpmTagVal tagN, rpmfiFlags flags);
 
 /** \ingroup rpmfi
  * Return file type from mode_t.
