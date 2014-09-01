@@ -1,1 +1,1 @@
-usr/lib/librpm.so.*
+usr/lib/*/librpm.so.*

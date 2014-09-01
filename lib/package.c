@@ -422,7 +422,7 @@ static rpmRC rpmpkgReadHeader(rpmKeyring keyring, rpmVSFlags vsflags,
 	*msg = NULL;
 
     memset(block, 0, sizeof(block));
-    if ((xx = Fread(block, 1, sizeof(block), fd)) != sizeof(block)) {
+    if ((xx = Freadall(fd, block, sizeof(block))) != sizeof(block)) {
 	rasprintf(&buf, 
 		_("hdr size(%d): BAD, read returned %d\n"), (int)sizeof(block), xx);
 	goto exit;
@@ -448,7 +448,7 @@ static rpmRC rpmpkgReadHeader(rpmKeyring keyring, rpmVSFlags vsflags,
     ei = xmalloc(uc);
     ei[0] = block[2];
     ei[1] = block[3];
-    if ((xx = Fread((char *)&ei[2], 1, nb, fd)) != nb) {
+    if ((xx = Freadall(fd, (char *)&ei[2], nb)) != nb) {
 	rasprintf(&buf, _("hdr blob(%zd): BAD, read returned %d\n"), nb, xx);
 	goto exit;
     }
@@ -600,8 +600,10 @@ static rpmRC rpmpkgRead(rpmKeyring keyring, rpmVSFlags vsflags,
     switch (sigtag) {
     case RPMSIGTAG_RSA:
     case RPMSIGTAG_DSA:
-	if (parsePGPSig(&sigtd, "package", fn, &sig))
+	if (parsePGPSig(&sigtd, "package", fn, &sig)) {
+	    rc = RPMRC_FAIL;
 	    goto exit;
+	}
 	/* fallthrough */
     case RPMSIGTAG_SHA1:
     {	struct rpmtd_s utd;
@@ -619,8 +621,10 @@ static rpmRC rpmpkgRead(rpmKeyring keyring, rpmVSFlags vsflags,
     case RPMSIGTAG_GPG:
     case RPMSIGTAG_PGP5:	/* XXX legacy */
     case RPMSIGTAG_PGP:
-	if (parsePGPSig(&sigtd, "package", fn, &sig))
+	if (parsePGPSig(&sigtd, "package", fn, &sig)) {
+	    rc = RPMRC_FAIL;
 	    goto exit;
+	}
 	/* fallthrough */
     case RPMSIGTAG_MD5:
 	/* Legacy signatures need the compressed payload in the digest too. */
@@ -680,12 +684,15 @@ exit:
 	    headerPutString(h, RPMTAG_SOURCERPM, "(none)");
 	}
 	/* 
-         * Convert legacy headers on the fly. Not having "new" style compressed
-         * filenames is close enough estimate for legacy indication... 
+         * Convert legacy headers on the fly. Not having immutable region
+         * equals a truly ancient package, do full retrofit. OTOH newer
+         * packages might have been built with --nodirtokens, test and handle
+         * the non-compressed filelist case separately.
          */
-	if (!headerIsEntry(h, RPMTAG_DIRNAMES)) {
+	if (!headerIsEntry(h, RPMTAG_HEADERIMMUTABLE))
 	    headerConvert(h, HEADERCONV_RETROFIT_V3);
-	}
+	else if (headerIsEntry(h, RPMTAG_OLDFILENAMES))
+	    headerConvert(h, HEADERCONV_COMPRESSFILELIST);
 	
 	/* Append (and remap) signature tags to the metadata. */
 	headerMergeLegacySigs(h, sigh);

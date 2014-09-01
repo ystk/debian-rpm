@@ -1,4 +1,4 @@
-<map id="structs" name="structs">
+<map id="Header API." name="Header API.">
 <area shape="rect" id="node2" href="$group__rpmcli.html" title="Command Line API." alt="" coords="198,5,338,32"/>
 <area shape="rect" id="node3" href="$group__rpmdb.html" title="Database API." alt="" coords="214,56,322,83"/>
 <area shape="rect" id="node4" href="$group__signature.html" title="Signature API." alt="" coords="215,107,321,133"/>

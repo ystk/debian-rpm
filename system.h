@@ -35,7 +35,9 @@ char * stpcpy(char * dest, const char * src);
 char * stpncpy(char * dest, const char * src, size_t n);
 #endif
 
-#if HAVE___SECURE_GETENV
+#if HAVE_SECURE_GETENV
+#define	getenv(_s)	secure_getenv(_s)
+#elif HAVE___SECURE_GETENV
 #define	getenv(_s)	__secure_getenv(_s)
 #endif
 
@@ -137,18 +139,7 @@ extern const char *__progname;
 
 /* ============== from misc/miscfn.h */
 
-#if !defined(USE_GNU_GLOB) 
-#if HAVE_FNMATCH_H
-#include <fnmatch.h>
-#endif
-
-#if HAVE_GLOB_H 
-#include <glob.h>
-#endif
-#else
-#include "misc/glob.h"
 #include "misc/fnmatch.h"
-#endif
 
 #include <dlfcn.h>
 

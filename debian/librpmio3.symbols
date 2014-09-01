@@ -106,6 +106,7 @@ librpmio.so.3 librpmio3 #MINVER#
  rpmGlobalMacroContext@Base 4.10.0
  rpmInitCrypto@Base 4.10.0
  rpmInitMacros@Base 4.10.0
+ rpmIsGlob@Base 4.11.0.1
  rpmKeyringAddKey@Base 4.10.0
  rpmKeyringFree@Base 4.10.0
  rpmKeyringLink@Base 4.10.0
@@ -180,6 +181,17 @@ librpmio.so.3 librpmio3 #MINVER#
  rpmsqAction@Base 4.10.0
  rpmsqEnable@Base 4.10.0
  rpmsqIsCaught@Base 4.10.0
+ rpmstrPoolCreate@Base 4.11.0.1
+ rpmstrPoolFree@Base 4.11.0.1
+ rpmstrPoolFreeze@Base 4.11.0.1
+ rpmstrPoolId@Base 4.11.0.1
+ rpmstrPoolIdn@Base 4.11.0.1
+ rpmstrPoolLink@Base 4.11.0.1
+ rpmstrPoolNumStr@Base 4.11.0.1
+ rpmstrPoolStr@Base 4.11.0.1
+ rpmstrPoolStreq@Base 4.11.0.1
+ rpmstrPoolStrlen@Base 4.11.0.1
+ rpmstrPoolUnfreeze@Base 4.11.0.1
  rpmswAdd@Base 4.10.0
  rpmswDiff@Base 4.10.0
  rpmswEnter@Base 4.10.0
@@ -199,7 +211,3 @@ librpmio.so.3 librpmio3 #MINVER#
  urlGetFile@Base 4.10.0
  urlIsURL@Base 4.10.0
  urlPath@Base 4.10.0
- (arch=!alpha !amd64 !ia64 !ppc64 !sparc64 !kfreebsd-amd64 !kfreebsd-i386 !s390x)glob64@Base 4.10.0
- (arch=!alpha !amd64 !ia64 !ppc64 !sparc64 !kfreebsd-amd64 !kfreebsd-i386 !s390x)globfree64@Base 4.10.0
- (arch=alpha amd64 ia64 ppc64 sparc64 kfreebsd-amd64 kfreebsd-i386 s390x)glob@Base 4.10.0
- (arch=alpha amd64 ia64 ppc64 sparc64 kfreebsd-amd64 kfreebsd-i386 s390x)globfree@Base 4.10.0

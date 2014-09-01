@@ -1,4 +1,86 @@
-rpm (4.10.0-5+deb7u1) testing-proposed-updates; urgency=low
+rpm (4.11.2-3) unstable; urgency=medium
+
+  * Tighten inter package dependencies (Closes: #745379).
+
+ -- Michal Čihař <nijel@debian.org>  Tue, 29 Apr 2014 10:54:42 +0200
+
+rpm (4.11.2-2.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Use bash to expand ~ in %_dbpath (Closes: #741324)
+
+ -- Ben Hutchings <ben@decadent.org.uk>  Sat, 22 Mar 2014 22:49:01 +0000
+
+rpm (4.11.2-2) unstable; urgency=low
+
+  * Reduce the double separator spec parse error into a warning
+    (Closes: #740245).
+
+ -- Michal Čihař <nijel@debian.org>  Thu, 27 Feb 2014 13:39:19 +0100
+
+rpm (4.11.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * Bump standards to 3.9.5.
+  * Re-enable selinux support (Closes: #725339).
+  * Suggest rpmlint and rpm2html.
+  * Provide safer value of rpmdb path (fallback to ~ when HOME is not set)
+    (LP: #1069350).
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 24 Feb 2014 11:23:44 +0100
+
+rpm (4.11.1-3) unstable; urgency=low
+
+  * Fixed implicit declarations warnings while compiling.
+  * Install debugedit to /usr/bin and provide manpage for it 
+    (Closes: #719180).
+
+ -- Michal Čihař <nijel@debian.org>  Tue, 10 Sep 2013 10:20:34 +0200
+
+rpm (4.11.1-2) unstable; urgency=low
+
+  [ Shawn Landden ]
+  * Split debugedit into its own package (Closes: #717020).
+
+  [ Michal Čihař ]
+  * Use debhelper 9.
+
+ -- Michal Čihař <nijel@debian.org>  Tue, 16 Jul 2013 09:15:31 +0200
+
+rpm (4.11.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * Do not try to convert ancient rpmrc config file (Closes: #712448).
+  * Make rpm2cpio Multi-Arch: foreign (Closes: #713970).
+  * Use canonical VCS urls.
+
+ -- Michal Čihař <nijel@debian.org>  Mon, 08 Jul 2013 10:33:12 +0200
+
+rpm (4.11.0.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * Bump standards to 3.9.4.
+  * Refresh patches, update patch from Fedora.
+  * Build with Lua 5.2.
+
+ -- Michal Čihař <nijel@debian.org>  Thu, 06 Jun 2013 11:39:34 +0200
+
+rpm (4.10.3.1-1) unstable; urgency=low
+
+  [ Daniel Schepler ]
+  * Update librpmio3.symbols, librpmbuild3.symbols for x32 (Closes: #699272).
+
+  [ Chris J Arges ]
+  * Fix multi-arch python include issues for RPM (Closes: #697634).
+
+  [ Michal Čihař ]
+  * New upstream release.
+    - Refreshed patches.
+    - Fixes __isa_name macro (Closes: #702958).
+
+ -- Michal Čihař <nijel@debian.org>  Tue, 07 May 2013 10:51:51 +0200
+
+rpm (4.10.1-2.1) unstable; urgency=low
 
   * Non-maintainer upload.
   * Add 0001-Ensure-correct-return-code-on-malformed-signature-in.patch
@@ -6,7 +88,21 @@ rpm (4.10.0-5+deb7u1) testing-proposed-updates; urgency=low
     signature in packages. Patch cherry-picked from upstream git repository.
     (Closes: #697375)
 
- -- Salvatore Bonaccorso <carnil@debian.org>  Sat, 05 Jan 2013 13:11:49 +0100
+ -- Salvatore Bonaccorso <carnil@debian.org>  Sat, 05 Jan 2013 13:06:25 +0100
+
+rpm (4.10.1-2) unstable; urgency=low
+
+  * Do not overwrite installed manpages by (wrong) symlinks 
+    (Closes: #691342, LP: #1018372).
+  * Correctly pass dpkg-buildflags LDFLAGS.
+
+ -- Michal Čihař <nijel@debian.org>  Thu, 25 Oct 2012 12:40:59 +0200
+
+rpm (4.10.1-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Michal Čihař <nijel@debian.org>  Fri, 19 Oct 2012 10:02:50 +0200
 
 rpm (4.10.0-5) unstable; urgency=low
 

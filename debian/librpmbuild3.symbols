@@ -25,7 +25,3 @@ librpmbuild.so.3 librpmbuild3 #MINVER#
  rpmfcProvides@Base 4.10.0
  rpmfcRequires@Base 4.10.0
  rpmspecQuery@Base 4.10.0
- (arch=!alpha !amd64 !ia64 !ppc64 !sparc64 !kfreebsd-amd64 !kfreebsd-i386 !s390x)glob64@Base 4.10.0
- (arch=!alpha !amd64 !ia64 !ppc64 !sparc64 !kfreebsd-amd64 !kfreebsd-i386 !s390x)globfree64@Base 4.10.0
- (arch=alpha amd64 ia64 ppc64 sparc64 kfreebsd-amd64 kfreebsd-i386 s390x)glob@Base 4.10.0
- (arch=alpha amd64 ia64 ppc64 sparc64 kfreebsd-amd64 kfreebsd-i386 s390x)globfree@Base 4.10.0

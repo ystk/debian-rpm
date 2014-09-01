@@ -60,8 +60,8 @@ struct Source * freeSources(struct Source * s)
 
 rpmRC lookupPackage(rpmSpec spec, const char *name, int flag,Package *pkg)
 {
-    const char *pname;
     char *fullName = NULL;
+    rpmsid nameid = 0;
     Package p;
 
     /* "main" package */
@@ -71,29 +71,29 @@ rpmRC lookupPackage(rpmSpec spec, const char *name, int flag,Package *pkg)
 	return RPMRC_OK;
     }
 
-    /* Construct package name */
+    /* Construct partial package name */
     if (flag == PART_SUBNAME) {
-	pname = headerGetString(spec->packages->header, RPMTAG_NAME);
-	rasprintf(&fullName, "%s-%s", pname, name);
-    } else {
-	fullName = xstrdup(name);
+	rasprintf(&fullName, "%s-%s",
+		 headerGetString(spec->packages->header, RPMTAG_NAME), name);
+	name = fullName;
     }
+    nameid = rpmstrPoolId(spec->pool, name, 1);
 
-    /* Locate package with fullName */
+    /* Locate package the name */
     for (p = spec->packages; p != NULL; p = p->next) {
-	pname = headerGetString(p->header, RPMTAG_NAME);
-	if (pname && (rstreq(fullName, pname))) {
+	if (p->name && p->name == nameid) {
 	    break;
 	}
     }
-    free(fullName);
+    if (fullName == name)
+	free(fullName);
 
     if (pkg)
 	*pkg = p;
     return ((p == NULL) ? RPMRC_FAIL : RPMRC_OK);
 }
 
-Package newPackage(rpmSpec spec)
+Package newPackage(const char *name, rpmstrPool pool, Package *pkglist)
 {
     Package p = xcalloc(1, sizeof(*p));
     p->header = headerNew();
@@ -102,15 +102,21 @@ Package newPackage(rpmSpec spec)
     p->fileList = NULL;
     p->fileFile = NULL;
     p->policyList = NULL;
+    p->pool = rpmstrPoolLink(pool);
 
-    if (spec->packages == NULL) {
-	spec->packages = p;
-    } else {
-	Package pp;
-	/* Always add package to end of list */
-	for (pp = spec->packages; pp->next != NULL; pp = pp->next)
-	    {};
-	pp->next = p;
+    if (name)
+	p->name = rpmstrPoolId(p->pool, name, 1);
+
+    if (pkglist) {
+	if (*pkglist == NULL) {
+	    *pkglist = p;
+	} else {
+	    Package pp;
+	    /* Always add package to end of list */
+	    for (pp = *pkglist; pp->next != NULL; pp = pp->next)
+		{};
+	    pp->next = p;
+	}
     }
     p->next = NULL;
 
@@ -129,15 +135,20 @@ static Package freePackage(Package pkg)
 
     pkg->header = headerFree(pkg->header);
     pkg->ds = rpmdsFree(pkg->ds);
+    pkg->requires = rpmdsFree(pkg->requires);
+    pkg->provides = rpmdsFree(pkg->provides);
+    pkg->conflicts = rpmdsFree(pkg->conflicts);
+    pkg->obsoletes = rpmdsFree(pkg->obsoletes);
+    pkg->triggers = rpmdsFree(pkg->triggers);
+    pkg->order = rpmdsFree(pkg->order);
     pkg->fileList = argvFree(pkg->fileList);
     pkg->fileFile = argvFree(pkg->fileFile);
     pkg->policyList = argvFree(pkg->policyList);
     pkg->cpioList = rpmfiFree(pkg->cpioList);
 
-    pkg->specialDoc = freeStringBuf(pkg->specialDoc);
-    pkg->specialDocDir = _free(pkg->specialDocDir);
     pkg->icon = freeSources(pkg->icon);
     pkg->triggerFiles = freeTriggerFiles(pkg->triggerFiles);
+    pkg->pool = rpmstrPoolFree(pkg->pool);
 
     free(pkg);
     return NULL;
@@ -162,6 +173,8 @@ rpmSpec newSpec(void)
     spec->specFile = NULL;
 
     spec->fileStack = NULL;
+    spec->lbufSize = BUFSIZ * 10;
+    spec->lbuf = xmalloc(spec->lbufSize);
     spec->lbuf[0] = '\0';
     spec->line = spec->lbuf;
     spec->nextline = NULL;
@@ -186,8 +199,7 @@ rpmSpec newSpec(void)
 
     spec->sourceRpmName = NULL;
     spec->sourcePkgId = NULL;
-    spec->sourceHeader = NULL;
-    spec->sourceCpioList = NULL;
+    spec->sourcePackage = NULL;
     
     spec->buildRoot = NULL;
     spec->buildSubdir = NULL;
@@ -201,6 +213,7 @@ rpmSpec newSpec(void)
     spec->flags = RPMSPEC_NONE;
 
     spec->macros = rpmGlobalMacroContext;
+    spec->pool = rpmstrPoolCreate();
     
 #ifdef WITH_LUA
     {
@@ -239,11 +252,11 @@ rpmSpec rpmSpecFree(rpmSpec spec)
 	rl->next = NULL;
 	free(rl);
     }
+    spec->lbuf = _free(spec->lbuf);
     
     spec->sourceRpmName = _free(spec->sourceRpmName);
     spec->sourcePkgId = _free(spec->sourcePkgId);
-    spec->sourceHeader = headerFree(spec->sourceHeader);
-    spec->sourceCpioList = rpmfiFree(spec->sourceCpioList);
+    spec->sourcePackage = freePackage(spec->sourcePackage);
 
     spec->buildRestrictions = headerFree(spec->buildRestrictions);
 
@@ -265,6 +278,7 @@ rpmSpec rpmSpecFree(rpmSpec spec)
 
     spec->sources = freeSources(spec->sources);
     spec->packages = freePackages(spec->packages);
+    spec->pool = rpmstrPoolFree(spec->pool);
     
     spec = _free(spec);
 
@@ -273,12 +287,12 @@ rpmSpec rpmSpecFree(rpmSpec spec)
 
 Header rpmSpecSourceHeader(rpmSpec spec)
 {
-	return spec->sourceHeader;
+    return (spec && spec->sourcePackage) ? spec->sourcePackage->header : NULL;
 }
 
 rpmds rpmSpecDS(rpmSpec spec, rpmTagVal tag)
 {
-    return (spec != NULL) ? rpmdsNew(spec->buildRestrictions, tag, 0) : NULL;
+    return (spec != NULL) ? rpmdsNew(spec->sourcePackage->header, tag, 0) : NULL;
 }
 
 rpmps rpmSpecCheckDeps(rpmts ts, rpmSpec spec)
@@ -418,7 +432,8 @@ int rpmspecQuery(rpmts ts, QVA_t qva, const char * arg)
 	    res += qva->qva_showPackage(qva, ts, pkg->header);
 	}
     } else {
-	res = qva->qva_showPackage(qva, ts, spec->sourceHeader);
+	Package sourcePkg = spec->sourcePackage;
+	res = qva->qva_showPackage(qva, ts, sourcePkg->header);
     }
 
 exit:

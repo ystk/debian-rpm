@@ -5,6 +5,7 @@
 #include <sechash.h>
 #include <keyhi.h>
 #include <cryptohi.h>
+#include <blapit.h>
 
 #include <rpm/rpmlog.h>
 #include "rpmio/digest.h"
@@ -13,6 +14,10 @@
 
 static int _crypto_initialized = 0;
 static int _new_process = 1;
+
+#if HAVE_NSS_INITCONTEXT
+static NSSInitContext * _nss_ctx = NULL;
+#endif
 
 /**
  * MD5/SHA1 digest private data.
@@ -41,9 +46,23 @@ int rpmInitCrypto(void)
 	rpmFreeCrypto();
     }
 
-    /* Initialize NSS if not already done */
+    /*
+     * Initialize NSS if not already done.
+     * NSS prior to 3.12.5 only supports a global context which can cause
+     * trouble when an API user wants to use NSS for their own purposes, use
+     * a private context if possible.
+     */
     if (!_crypto_initialized) {
+#if HAVE_NSS_INITCONTEXT
+	PRUint32 flags = (NSS_INIT_READONLY|NSS_INIT_NOCERTDB|
+			  NSS_INIT_NOMODDB|NSS_INIT_FORCEOPEN|
+			  NSS_INIT_NOROOTINIT|NSS_INIT_OPTIMIZESPACE);
+	_nss_ctx = NSS_InitContext(NULL, NULL, NULL, NULL, NULL, flags);
+	if (_nss_ctx == NULL) {
+#else
 	if (NSS_NoDB_Init(NULL) != SECSuccess) {
+#endif
+	    rpmlog(RPMLOG_ERR, _("Failed to initialize NSS library\n"));
 	    rc = -1;
 	} else {
 	    _crypto_initialized = 1;
@@ -64,7 +83,12 @@ int rpmFreeCrypto(void)
 {
     int rc = 0;
     if (_crypto_initialized) {
+#if HAVE_NSS_INITCONTEXT
+	rc = (NSS_ShutdownContext(_nss_ctx) != SECSuccess);
+	_nss_ctx = NULL;
+#else
 	rc = (NSS_Shutdown() != SECSuccess);
+#endif
     	_crypto_initialized = 0;
     }
     return rc;
@@ -87,31 +111,17 @@ RPM_GNUC_PURE
 static HASH_HashType getHashType(int hashalgo)
 {
     switch (hashalgo) {
-    case PGPHASHALGO_MD5:
-	return HASH_AlgMD5;
-	break;
-    case PGPHASHALGO_MD2:
-	return HASH_AlgMD2;
-	break;
-    case PGPHASHALGO_SHA1:
-	return HASH_AlgSHA1;
-	break;
-    case PGPHASHALGO_SHA256:
-	return HASH_AlgSHA256;
-	break;
-    case PGPHASHALGO_SHA384:
-	return HASH_AlgSHA384;
-	break;
-    case PGPHASHALGO_SHA512:
-	return HASH_AlgSHA512;
-	break;
-    case PGPHASHALGO_RIPEMD160:
-    case PGPHASHALGO_TIGER192:
-    case PGPHASHALGO_HAVAL_5_160:
-    default:
-	return HASH_AlgNULL;
-	break;
+    case PGPHASHALGO_MD5:	return HASH_AlgMD5;
+    case PGPHASHALGO_MD2:	return HASH_AlgMD2;
+    case PGPHASHALGO_SHA1:	return HASH_AlgSHA1;
+#ifdef SHA224_LENGTH
+    case PGPHASHALGO_SHA224:	return HASH_AlgSHA224;
+#endif
+    case PGPHASHALGO_SHA256:	return HASH_AlgSHA256;
+    case PGPHASHALGO_SHA384:	return HASH_AlgSHA384;
+    case PGPHASHALGO_SHA512:	return HASH_AlgSHA512;
     }
+    return HASH_AlgNULL;
 }
 
 size_t rpmDigestLength(int hashalgo)
@@ -197,17 +207,30 @@ int rpmDigestFinal(DIGEST_CTX ctx, void ** datap, size_t *lenp, int asAscii)
     return 0;
 }
 
-static int pgpMpiSet(unsigned int lbits, uint8_t *dest,
-		     const uint8_t * p, const uint8_t * pend)
+RPM_GNUC_PURE
+static SECOidTag getHashAlg(unsigned int hashalgo)
+{
+    switch (hashalgo) {
+    case PGPHASHALGO_MD5:	return SEC_OID_MD5;
+    case PGPHASHALGO_MD2:	return SEC_OID_MD2;
+    case PGPHASHALGO_SHA1:	return SEC_OID_SHA1;
+#ifdef SHA224_LENGTH
+    case PGPHASHALGO_SHA224:	return SEC_OID_SHA224;
+#endif
+    case PGPHASHALGO_SHA256:	return SEC_OID_SHA256;
+    case PGPHASHALGO_SHA384:	return SEC_OID_SHA384;
+    case PGPHASHALGO_SHA512:	return SEC_OID_SHA512;
+    }
+    return SEC_OID_UNKNOWN;
+}
+
+static int pgpMpiSet(unsigned int lbits, uint8_t *dest, const uint8_t * p)
 {
     unsigned int mbits = pgpMpiBits(p);
     unsigned int nbits;
     size_t nbytes;
     uint8_t *t = dest;
     unsigned int ix;
-
-    if ((p + ((mbits+7) >> 3)) > pend)
-	return 1;
 
     if (mbits > lbits)
 	return 1;
@@ -223,13 +246,9 @@ static int pgpMpiSet(unsigned int lbits, uint8_t *dest,
     return 0;
 }
 
-static SECItem *pgpMpiItem(PRArenaPool *arena, SECItem *item,
-			   const uint8_t *p, const uint8_t *pend)
+static SECItem *pgpMpiItem(PRArenaPool *arena, SECItem *item, const uint8_t *p)
 {
     size_t nbytes = pgpMpiLen(p)-2;
-
-    if (p + nbytes + 2 > pend)
-	return NULL;
 
     if (item == NULL) {
     	if ((item=SECITEM_AllocItem(arena, item, nbytes)) == NULL)
@@ -275,25 +294,33 @@ static SECKEYPublicKey *pgpNewPublicKey(KeyType type)
     return key;
 }
 
-#ifndef DSA_SUBPRIME_LEN
-#define DSA_SUBPRIME_LEN 20
+/* compatibility with nss < 3.14 */
+#ifndef DSA1_SUBPRIME_LEN
+#define DSA1_SUBPRIME_LEN DSA_SUBPRIME_LEN
+#endif
+#ifndef DSA1_SIGNATURE_LEN
+#define DSA1_SIGNATURE_LEN DSA_SIGNATURE_LEN
+#endif
+#ifndef DSA1_Q_BITS
+#define DSA1_Q_BITS DSA_Q_BITS
 #endif
 
-static int pgpSetSigMpiDSA(pgpDigAlg pgpsig, int num,
-			   const uint8_t *p, const uint8_t *pend)
+static int pgpSetSigMpiDSA(pgpDigAlg pgpsig, int num, const uint8_t *p)
 {
     SECItem *sig = pgpsig->data;
-    int lbits = DSA_SUBPRIME_LEN * 8;
+    int lbits = DSA1_Q_BITS;
     int rc = 1; /* assume failure */
 
     switch (num) {
     case 0:
-	sig = pgpsig->data = SECITEM_AllocItem(NULL, NULL, 2*DSA_SUBPRIME_LEN);
-	memset(sig->data, 0, 2 * DSA_SUBPRIME_LEN);
-	rc = pgpMpiSet(lbits, sig->data, p, pend);
+	sig = pgpsig->data = SECITEM_AllocItem(NULL, NULL, DSA1_SIGNATURE_LEN);
+	if (sig) {
+	    memset(sig->data, 0, DSA1_SIGNATURE_LEN);
+	    rc = pgpMpiSet(lbits, sig->data, p);
+	}
 	break;
     case 1:
-	if (sig && pgpMpiSet(lbits, sig->data+DSA_SUBPRIME_LEN, p, pend) == 0) {
+	if (sig && pgpMpiSet(lbits, sig->data+DSA1_SUBPRIME_LEN, p) == 0) {
 	    SECItem *signew = SECITEM_AllocItem(NULL, NULL, 0);
 	    if (signew && DSAU_EncodeDerSig(signew, sig) == SECSuccess) {
 		SECITEM_FreeItem(sig, PR_TRUE);
@@ -307,8 +334,7 @@ static int pgpSetSigMpiDSA(pgpDigAlg pgpsig, int num,
     return rc;
 }
 
-static int pgpSetKeyMpiDSA(pgpDigAlg pgpkey, int num,
-			   const uint8_t *p, const uint8_t *pend)
+static int pgpSetKeyMpiDSA(pgpDigAlg pgpkey, int num, const uint8_t *p)
 {
     SECItem *mpi = NULL;
     SECKEYPublicKey *key = pgpkey->data;
@@ -319,16 +345,16 @@ static int pgpSetKeyMpiDSA(pgpDigAlg pgpkey, int num,
     if (key) {
 	switch (num) {
 	case 0:
-	    mpi = pgpMpiItem(key->arena, &key->u.dsa.params.prime, p, pend);
+	    mpi = pgpMpiItem(key->arena, &key->u.dsa.params.prime, p);
 	    break;
 	case 1:
-	    mpi = pgpMpiItem(key->arena, &key->u.dsa.params.subPrime, p, pend);
+	    mpi = pgpMpiItem(key->arena, &key->u.dsa.params.subPrime, p);
 	    break;
 	case 2:
-	    mpi = pgpMpiItem(key->arena, &key->u.dsa.params.base, p, pend);
+	    mpi = pgpMpiItem(key->arena, &key->u.dsa.params.base, p);
 	    break;
 	case 3:
-	    mpi = pgpMpiItem(key->arena, &key->u.dsa.publicValue, p, pend);
+	    mpi = pgpMpiItem(key->arena, &key->u.dsa.publicValue, p);
 	    break;
 	}
     }
@@ -340,30 +366,32 @@ static int pgpVerifySigDSA(pgpDigAlg pgpkey, pgpDigAlg pgpsig,
 			   uint8_t *hash, size_t hashlen, int hash_algo)
 {
     SECItem digest = { .type = siBuffer, .data = hash, .len = hashlen };
-    SECOidTag sigalg = SEC_OID_ANSIX9_DSA_SIGNATURE_WITH_SHA1_DIGEST;
+    SECOidTag encAlg = SEC_OID_ANSIX9_DSA_SIGNATURE;
+    SECOidTag hashAlg = getHashAlg(hash_algo);
     SECStatus rc;
 
-    /* XXX VFY_VerifyDigest() is deprecated in NSS 3.12 */ 
-    rc = VFY_VerifyDigest(&digest, pgpkey->data, pgpsig->data, sigalg, NULL);
+    if (hashAlg == SEC_OID_UNKNOWN)
+	return 1;
+
+    rc = VFY_VerifyDigestDirect(&digest, pgpkey->data, pgpsig->data,
+				encAlg, hashAlg, NULL);
 
     return (rc != SECSuccess);
 }
 
-static int pgpSetSigMpiRSA(pgpDigAlg pgpsig, int num,
-			   const uint8_t *p, const uint8_t *pend)
+static int pgpSetSigMpiRSA(pgpDigAlg pgpsig, int num, const uint8_t *p)
 {
     SECItem *sigitem = NULL;
 
     if (num == 0) {
-       sigitem = pgpMpiItem(NULL, pgpsig->data, p, pend);
+       sigitem = pgpMpiItem(NULL, pgpsig->data, p);
        if (sigitem)
            pgpsig->data = sigitem;
     }
     return (sigitem == NULL);
 }
 
-static int pgpSetKeyMpiRSA(pgpDigAlg pgpkey, int num,
-			   const uint8_t *p, const uint8_t *pend)
+static int pgpSetKeyMpiRSA(pgpDigAlg pgpkey, int num, const uint8_t *p)
 {
     SECItem *kitem = NULL;
     SECKEYPublicKey *key = pgpkey->data;
@@ -374,10 +402,10 @@ static int pgpSetKeyMpiRSA(pgpDigAlg pgpkey, int num,
     if (key) {
 	switch (num) {
 	case 0:
-	    kitem = pgpMpiItem(key->arena, &key->u.rsa.modulus, p, pend);
+	    kitem = pgpMpiItem(key->arena, &key->u.rsa.modulus, p);
 	    break;
 	case 1:
-	    kitem = pgpMpiItem(key->arena, &key->u.rsa.publicExponent, p, pend);
+	    kitem = pgpMpiItem(key->arena, &key->u.rsa.publicExponent, p);
 	    break;
 	}
     }
@@ -392,33 +420,13 @@ static int pgpVerifySigRSA(pgpDigAlg pgpkey, pgpDigAlg pgpsig,
     SECItem *sig = pgpsig->data;
     SECKEYPublicKey *key = pgpkey->data;
     SECItem *padded = NULL;
-    SECOidTag sigalg;
+    SECOidTag encAlg = SEC_OID_PKCS1_RSA_ENCRYPTION;
+    SECOidTag hashAlg = getHashAlg(hash_algo);
     SECStatus rc = SECFailure;
     size_t siglen, padlen;
 
-    switch (hash_algo) {
-    case PGPHASHALGO_MD5:
-	sigalg = SEC_OID_PKCS1_MD5_WITH_RSA_ENCRYPTION;
-	break;
-    case PGPHASHALGO_MD2:
-	sigalg = SEC_OID_PKCS1_MD2_WITH_RSA_ENCRYPTION;
-	break;
-    case PGPHASHALGO_SHA1:
-	sigalg = SEC_OID_PKCS1_SHA1_WITH_RSA_ENCRYPTION;
-	break;
-    case PGPHASHALGO_SHA256:
-	sigalg = SEC_OID_PKCS1_SHA256_WITH_RSA_ENCRYPTION;
-	break;
-    case PGPHASHALGO_SHA384:
-	 sigalg = SEC_OID_PKCS1_SHA384_WITH_RSA_ENCRYPTION;
-	break;
-    case PGPHASHALGO_SHA512:
-	sigalg = SEC_OID_PKCS1_SHA512_WITH_RSA_ENCRYPTION;
-	break;
-    default:
-	return 1; /* dont bother with unknown hash types */
-	break;
-    }
+    if (hashAlg == SEC_OID_UNKNOWN)
+	return 1;
 
     /* Zero-pad signature to expected size if necessary */
     siglen = SECKEY_SignatureLen(key);
@@ -432,8 +440,7 @@ static int pgpVerifySigRSA(pgpDigAlg pgpkey, pgpDigAlg pgpsig,
 	sig = padded;
     }
 
-    /* XXX VFY_VerifyDigest() is deprecated in NSS 3.12 */ 
-    rc = VFY_VerifyDigest(&digest, key, sig, sigalg, NULL);
+    rc = VFY_VerifyDigestDirect(&digest, key, sig, encAlg, hashAlg, NULL);
 
     if (padded)
 	SECITEM_ZfreeItem(padded, PR_TRUE);
@@ -453,8 +460,7 @@ static void pgpFreeKeyRSADSA(pgpDigAlg ka)
     ka->data = NULL;
 }
 
-static int pgpSetMpiNULL(pgpDigAlg pgpkey, int num,
-			 const uint8_t *p, const uint8_t *pend)
+static int pgpSetMpiNULL(pgpDigAlg pgpkey, int num, const uint8_t *p)
 {
     return 1;
 }

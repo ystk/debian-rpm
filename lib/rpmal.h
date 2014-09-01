@@ -17,6 +17,7 @@ typedef struct rpmal_s * rpmal;
 
 /**
  * Initialize available packckages, items, and directory list.
+ * @param pool		shared string pool with base, dir and dependency names
  * @param delta		no. of entries to add on each realloc
  * @param tsflags	transaction control flags
  * @param tscolor	transaction color bits
@@ -24,7 +25,7 @@ typedef struct rpmal_s * rpmal;
  * @return al		new available list
  */
 RPM_GNUC_INTERNAL
-rpmal rpmalCreate(int delta, rpmtransFlags tsflags,
+rpmal rpmalCreate(rpmstrPool pool, int delta, rpmtransFlags tsflags,
 		  rpm_color_t tscolor, rpm_color_t prefcolor);
 
 /**
@@ -50,6 +51,24 @@ void rpmalDel(rpmal al, rpmte p);
  */
 RPM_GNUC_INTERNAL
 void rpmalAdd(rpmal al, rpmte p);
+
+/**
+ * Lookup all obsoleters for a dependency in the available list
+ * @param al		available list
+ * @param ds		dependency set
+ * @return		obsoleting packages for ds, NULL if none
+ */
+RPM_GNUC_INTERNAL
+rpmte * rpmalAllObsoletes(const rpmal al, const rpmds ds);
+
+/**
+ * Lookup all providers for a dependency in the available list
+ * @param al		available list
+ * @param ds		dependency set
+ * @return		best provider for the dependency, NULL if none
+ */
+RPM_GNUC_INTERNAL
+rpmte * rpmalAllSatisfiesDepend(const rpmal al, const rpmds ds);
 
 /**
  * Lookup best provider for a dependency in the available list

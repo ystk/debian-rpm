@@ -1,10 +1,10 @@
 #    rpmconflict.at: rpm file conflict tests
 
-AT_BANNER([RPM file conflicts])
+AT_BANNER([RPM implicit file conflicts])
 
 # ------------------------------
 # (Build and) install conflicting package (should fail)
-AT_SETUP([rpm -U to package with file conflict])
+AT_SETUP([package with file conflict])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -28,7 +28,7 @@ AT_CLEANUP
 
 # ------------------------------
 # Install conflicting packages in same transaction (should fail)
-AT_SETUP([rpm -U two packages with a conflicting file])
+AT_SETUP([two packages with a conflicting file])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -45,7 +45,7 @@ AT_CLEANUP
 
 # ------------------------------
 # (Build and) install package with shareable file
-AT_SETUP([rpm -U package with shareable file])
+AT_SETUP([package with shareable file])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -69,7 +69,7 @@ AT_CLEANUP
 
 # ------------------------------
 # Install packages with shareable file in same transaction
-AT_SETUP([rpm -U two packages with shareable file])
+AT_SETUP([two packages with shareable file])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -86,7 +86,7 @@ AT_CLEANUP
 
 # ------------------------------
 # (Build and) install package with identical basename in different directories
-AT_SETUP([rpm -U with non-conflicting identical basenames])
+AT_SETUP([non-conflicting identical basenames])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -104,7 +104,7 @@ AT_CLEANUP
 
 # ------------------------------
 # (Build and) install package with a self-conflict due to directory symlinks
-AT_SETUP([rpm -U with conflicting identical basenames])
+AT_SETUP([conflicting identical basenames])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -124,7 +124,7 @@ runroot rpm -U "${TOPDIR}"/RPMS/noarch/selfconflict-1.0-1.noarch.rpm
 AT_CLEANUP
 # ------------------------------
 # File conflict between colored files, prefer 64bit
-AT_SETUP([rpm -U multilib elf conflict, prefer 64bit])
+AT_SETUP([multilib elf conflict, prefer 64bit 1])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -135,16 +135,72 @@ runroot rpm -U --ignoreos --ignorearch --nodeps \
   --define "_prefer_color 2" \
   /data/RPMS/hello-2.0-1.i686.rpm \
   /data/RPMS/hello-2.0-1.x86_64.rpm
-runroot rpm -q --qf "[[%{filestates:fstate} ]]" hello.i686 hello.x86_64
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686 hello.x86_64
 ],
 [0],
-[wrong color normal normal normal normal normal normal normal normal normal ],
+[wrong color,normal,normal,normal,normal,
+normal,normal,normal,normal,normal,
+],
+[])
+AT_CLEANUP
+
+# ------------------------------
+# File conflict between colored files, prefer 64bit
+AT_SETUP([multilib elf conflict, prefer 64bit 2])
+AT_KEYWORDS([install])
+AT_CHECK([
+RPMDB_CLEAR
+RPMDB_INIT
+
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 2" \
+  /data/RPMS/hello-2.0-1.i686.rpm
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 2" \
+  /data/RPMS/hello-2.0-1.x86_64.rpm
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686 hello.x86_64
+],
+[0],
+[normal,normal,normal,normal,normal,
+wrong color,normal,normal,normal,normal,
+normal,normal,normal,normal,normal,
+],
+[])
+AT_CLEANUP
+
+# ------------------------------
+# File conflict between colored files, prefer 64bit
+AT_SETUP([multilib elf conflict, prefer 64bit 3])
+AT_KEYWORDS([install])
+AT_CHECK([
+RPMDB_CLEAR
+RPMDB_INIT
+
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 2" \
+  /data/RPMS/hello-2.0-1.x86_64.rpm
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.x86_64
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 2" \
+  /data/RPMS/hello-2.0-1.i686.rpm
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686 hello.x86_64
+],
+[0],
+[normal,normal,normal,normal,normal,
+wrong color,normal,normal,normal,normal,
+normal,normal,normal,normal,normal,
+],
 [])
 AT_CLEANUP
 
 # ------------------------------
 # File conflict between colored files, prefer 32bit
-AT_SETUP([rpm -U multilib elf conflict, prefer 32bit])
+AT_SETUP([multilib elf conflict, prefer 32bit 1])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -155,16 +211,72 @@ runroot rpm -U --ignoreos --ignorearch --nodeps \
   --define "_prefer_color 1" \
   /data/RPMS/hello-2.0-1.i686.rpm \
   /data/RPMS/hello-2.0-1.x86_64.rpm
-runroot rpm -q --qf "[[%{filestates:fstate} ]]" hello.i686 hello.x86_64
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686 hello.x86_64
 ],
 [0],
-[normal normal normal normal normal wrong color normal normal normal normal ],
+[normal,normal,normal,normal,normal,
+wrong color,normal,normal,normal,normal,
+],
+[])
+AT_CLEANUP
+
+# ------------------------------
+# File conflict between colored files, prefer 32bit
+AT_SETUP([multilib elf conflict, prefer 32bit 2])
+AT_KEYWORDS([install])
+AT_CHECK([
+RPMDB_CLEAR
+RPMDB_INIT
+
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 1" \
+  /data/RPMS/hello-2.0-1.i686.rpm 
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 1" \
+  /data/RPMS/hello-2.0-1.x86_64.rpm 
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686 hello.x86_64
+],
+[0],
+[normal,normal,normal,normal,normal,
+normal,normal,normal,normal,normal,
+wrong color,normal,normal,normal,normal,
+],
+[])
+AT_CLEANUP
+
+# ------------------------------
+# File conflict between colored files, prefer 32bit
+AT_SETUP([multilib elf conflict, prefer 32bit 3])
+AT_KEYWORDS([install])
+AT_CHECK([
+RPMDB_CLEAR
+RPMDB_INIT
+
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 1" \
+  /data/RPMS/hello-2.0-1.x86_64.rpm 
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.x86_64
+runroot rpm -U --ignoreos --ignorearch --nodeps \
+  --define "_transaction_color 3" \
+  --define "_prefer_color 1" \
+  /data/RPMS/hello-2.0-1.i686.rpm 
+runroot rpm -q --qf "[[%{filestates:fstate},]]\n" hello.i686 hello.x86_64
+],
+[0],
+[normal,normal,normal,normal,normal,
+normal,normal,normal,normal,normal,
+wrong color,normal,normal,normal,normal,
+],
 [])
 AT_CLEANUP
 
 # ------------------------------
 # File conflict between colored and non-colored file 1
-AT_SETUP([rpm -U multilib elf vs non-elf file conflict 1])
+AT_SETUP([multilib elf vs non-elf file conflict 1])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -185,7 +297,7 @@ runroot rpm -U --ignoreos --ignorearch --nodeps \
 AT_CLEANUP
 
 # File conflict between colored and non-colored file 2
-AT_SETUP([rpm -U multilib elf vs non-elf file conflict 2])
+AT_SETUP([multilib elf vs non-elf file conflict 2])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -210,7 +322,7 @@ runroot rpm -U --ignoreos --ignorearch --nodeps \
 AT_CLEANUP
 
 # File conflict between colored and non-colored file 3
-AT_SETUP([rpm -U multilib elf vs non-elf file conflict 3])
+AT_SETUP([multilib elf vs non-elf file conflict 3])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -235,8 +347,8 @@ runroot rpm -U --ignoreos --ignorearch --nodeps \
 AT_CLEANUP
 
 # ------------------------------
-# Replace directory with symlink, this is expected to fail
-AT_SETUP([rpm -U replacing directory with symlink])
+# Removal conflict on directory -> symlink change
+AT_SETUP([replacing directory with symlink])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -252,19 +364,15 @@ runroot rpmbuild --quiet -bb \
 runroot rpm -U "${TOPDIR}"/RPMS/noarch/symlinktest-1.0-1.noarch.rpm
 runroot rpm -U "${TOPDIR}"/RPMS/noarch/symlinktest-1.0-2.noarch.rpm
 ],
-[1],
+[2],
 [],
-[error: unpacking of archive failed on file /usr/share/symlinktest: cpio: rename failed - Is a directory
-error: symlinktest-1.0-2.noarch: install failed
-error: symlinktest-1.0-1.noarch: erase skipped
+[	file /usr/share/symlinktest from install of symlinktest-1.0-2.noarch conflicts with file from package symlinktest-1.0-1.noarch
 ])
 AT_CLEANUP
 
 # ------------------------------
-# Replace symlink with a directory - the upgrade succeeds but leaves an
-# orphan directory that the symlink now points to. Should verify the
-# result more carefully...
-AT_SETUP([rpm -U replacing symlink with directory])
+# Replace symlink with a directory
+AT_SETUP([replacing symlink with directory])
 AT_KEYWORDS([install])
 AT_CHECK([
 RPMDB_CLEAR
@@ -280,7 +388,46 @@ runroot rpmbuild --quiet -bb \
 runroot rpm -U "${TOPDIR}"/RPMS/noarch/symlinktest-1.0-1.noarch.rpm
 runroot rpm -U "${TOPDIR}"/RPMS/noarch/symlinktest-1.0-2.noarch.rpm
 ],
-[0],
+[2],
 [],
+[	file /usr/share/symlinktest from install of symlinktest-1.0-2.noarch conflicts with file from package symlinktest-1.0-1.noarch
+])
+AT_CLEANUP
+
+# ------------------------------
+# Regular file shared with a ghost, does not conflict
+# Regular file should be created and not removed when the ghost is removed
+AT_SETUP([real file with shared ghost])
+AT_KEYWORDS([install])
+AT_CHECK([
+RPMDB_CLEAR
+RPMDB_INIT
+fn="${RPMTEST}"/usr/share/my.version
+rm -rf "${TOPDIR}" "${fn}"
+
+runroot rpmbuild --quiet -bb \
+    --define "pkg one" --define "filedata one" \
+    /data/SPECS/conflicttest.spec
+runroot rpmbuild --quiet -bb \
+    --define "pkg two" --define "filedata two" --define "fileattr %ghost"\
+    /data/SPECS/conflicttest.spec
+
+test ! -f "${fn}" && echo OK
+runroot rpm -U \
+    "${TOPDIR}"/RPMS/noarch/conflictone-1.0-1.noarch.rpm \
+    "${TOPDIR}"/RPMS/noarch/conflicttwo-1.0-1.noarch.rpm
+cat "${fn}"
+runroot rpm -e conflicttwo
+cat "${fn}"
+runroot rpm -e conflictone
+test ! -f "${fn}" && echo OK
+],
+[],
+[OK
+one
+one
+OK
+],
 [])
 AT_CLEANUP
+

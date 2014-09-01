@@ -1,7 +1,7 @@
 Source: rpm
 Section: admin
 Priority: optional
-Build-Depends: debhelper (>= 7.0.50),
+Build-Depends: debhelper (>= 9),
                dpkg-dev (>= 1.16.1~),
                dh-autoreconf,
                libtool (>= 2.2.10),
@@ -29,24 +29,29 @@ Build-Depends: debhelper (>= 7.0.50),
                libelf-dev,
                libdw-dev,
                libdb-dev,
-               liblua5.1-0-dev (>= 5.1.4-4)
+               liblua5.2-dev,
+               libselinux-dev [linux-any],
+               libsemanage-dev [linux-any]
 Maintainer: Michal Čihař <nijel@debian.org>
 Uploaders: Loic Minier <lool@dooz.org>
 X-Python-Version: >= 2.6
-Standards-Version: 3.9.3
+Standards-Version: 3.9.5
 Homepage: http://rpm.org/
-Vcs-Browser: http://git.debian.org/?p=collab-maint/rpm.git
-Vcs-Git: git://git.debian.org/git/collab-maint/rpm.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/rpm.git
+Vcs-Git: git://anonscm.debian.org/collab-maint/rpm.git
 
 Package: rpm
 Architecture: any
 Suggests: alien, 
         elfutils,
+        rpmlint,
+        rpm2html,
         rpm-i18n
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          perl,
          rpm2cpio,
+         debugedit (= ${binary:Version}),
          rpm-common (= ${binary:Version})
 Replaces: manpages-pl (<< 20051017-1)
 Breaks: manpages-pl (<< 20051017-1), man-db (<< 2.5.0-1)
@@ -64,6 +69,7 @@ Architecture: any
 Suggests: rpm-i18n
 Replaces: rpm (<<4.7.1-1)
 Breaks: rpm (<<4.7.1-1)
+Multi-Arch: foreign
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          rpm-common (= ${binary:Version})
@@ -121,7 +127,9 @@ Description: debugging symbols for RPM
 Package: librpm3
 Architecture: any
 Section: libs
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         librpmio3 (= ${binary:Version})
 Recommends: rpm-common (= ${binary:Version})
 Description: RPM shared library
  The RPM Package Manager (RPM) is a command-line driven package
@@ -147,7 +155,9 @@ Package: librpmbuild3
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends},
-         ${misc:Depends}
+         ${misc:Depends},
+         librpm3 (= ${binary:Version}),
+         librpmio3 (= ${binary:Version})
 Description: RPM build shared library
  The RPM Package Manager (RPM) is a command-line driven package
  management system capable of installing, uninstalling, verifying,
@@ -159,7 +169,9 @@ Package: librpmsign1
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends},
-         ${misc:Depends}
+         ${misc:Depends},
+         librpm3 (= ${binary:Version}),
+         librpmio3 (= ${binary:Version})
 Description: RPM signing shared library
  The RPM Package Manager (RPM) is a command-line driven package
  management system capable of installing, uninstalling, verifying,
@@ -208,7 +220,11 @@ Section: python
 Priority: extra
 Depends: ${misc:Depends},
          ${shlibs:Depends},
-         ${python:Depends}
+         ${python:Depends},
+         librpm3 (= ${binary:Version}),
+         librpmio3 (= ${binary:Version}),
+         librpmbuild3 (= ${binary:Version}),
+         librpmsign1 (= ${binary:Version})
 Replaces: python2.3-rpm,
           python2.4-rpm
 Conflicts: python2.3-rpm,
@@ -222,3 +238,17 @@ Description: Python bindings for RPM
  .
  This package includes the Python bindings for librpm, allowing Python
  scripts to manipulate RPM packages and the RPM database.
+
+Package: debugedit
+Architecture: any
+Suggests: rpm-i18n
+Replaces: rpm (<<4.11.1-2)
+Breaks: rpm (<<4.11.1-2)
+Multi-Arch: foreign
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         librpmio3 (= ${binary:Version})
+Description: tool to mangle source locations in .debug files
+ This tool allows rewriting of source code locations in .debug files
+ to point to /usr/src (or anywhere else). It has been split out of the
+ rpm package to be useful on its own.

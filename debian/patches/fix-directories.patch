@@ -6,7 +6,7 @@ Description: Fix installation directories
 Author: Michal Čihař <nijel@debian.org>
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -89,7 +89,7 @@
+@@ -90,7 +90,7 @@
  pkginclude_HEADERS += build/rpmspec.h
  
  
@@ -15,7 +15,7 @@ Author: Michal Čihař <nijel@debian.org>
  rpmbin_PROGRAMS = rpm
  
  bin_PROGRAMS =		rpm2cpio rpmbuild rpmdb rpmkeys rpmsign rpmspec
-@@ -224,9 +224,9 @@
+@@ -225,9 +225,9 @@
  
  install-exec-hook:
  	@rm -f $(DESTDIR)$(bindir)/rpmquery
@@ -40,7 +40,7 @@ Author: Michal Čihař <nijel@debian.org>
  	(the build will take longer since both dep and strace are pigs)
 --- a/macros.in
 +++ b/macros.in
-@@ -792,7 +792,7 @@
+@@ -799,7 +799,7 @@
  %_datadir		%{_prefix}/share
  %_sysconfdir		/etc
  %_sharedstatedir	%{_prefix}/com

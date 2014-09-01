@@ -5,7 +5,6 @@ usr/bin/rpm[a-z]*
 # which are in rpm-common.
 usr/lib/rpm/brp*
 usr/lib/rpm/check*
-usr/lib/rpm/debugedit
 usr/lib/rpm/find*
 usr/lib/rpm/libtool*
 usr/lib/rpm/mkinstalldirs
@@ -27,6 +26,7 @@ usr/lib/rpm/elfdeps
 usr/lib/rpm/desktop-file.prov
 usr/lib/rpm/ocaml-find-provides.sh
 usr/lib/rpm/fileattrs
+usr/lib/rpm/rpm.supp
 usr/share/man/man1/*
 usr/share/man/man8/rpm.*
 usr/share/man/man8/rpm[a-z]*.*

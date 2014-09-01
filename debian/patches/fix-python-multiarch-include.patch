@@ -1,0 +1,38 @@
+Description: Fix python include issues due to multiarch.
+ .
+ rpm (4.10.1-2.1ubuntu1) raring; urgency=low
+ .
+  * debian/patches/fix-python-multiarch-include.patch:
+    Fix python multiarch include issue that causes FTBFS.
+Author: Chris J Arges <chris.j.arges@canonical.com>
+Last-Update: <2013-01-07>
+
+---
+
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -541,10 +541,10 @@
+ 
+ AS_IF([test "$enable_python" = yes],[
+   AM_PATH_PYTHON([2.6],[
+-    WITH_PYTHON_INCLUDE=`${PYTHON} -c 'from distutils.sysconfig import *; import sys; sys.stdout.write(get_python_inc())'`
++    WITH_PYTHON_INCLUDE=`python-config --includes`
+     WITH_PYTHON_SUBPACKAGE=1
+     save_CPPFLAGS="$CPPFLAGS"
+-    CPPFLAGS="$CPPFLAGS -I$WITH_PYTHON_INCLUDE"
++    CPPFLAGS="$CPPFLAGS $WITH_PYTHON_INCLUDE"
+     AC_CHECK_HEADER([Python.h],[],
+       [AC_MSG_ERROR([missing Python.h])
+       ])
+--- a/python/Makefile.am
++++ b/python/Makefile.am
+@@ -4,7 +4,7 @@
+ 
+ AM_CPPFLAGS = -I$(top_builddir)/include/
+ AM_CPPFLAGS += -I$(top_srcdir)/python
+-AM_CPPFLAGS += -I@WITH_PYTHON_INCLUDE@
++AM_CPPFLAGS += @WITH_PYTHON_INCLUDE@
+ 
+ pkgpyexec_LTLIBRARIES = _rpmmodule.la _rpmbmodule.la _rpmsmodule.la
+ pkgpyexec_DATA = rpm/__init__.py rpm/transaction.py

@@ -14,17 +14,18 @@
 
 int filter_private = 0;
 int soname_only = 0;
+int fake_soname = 1;
 
 typedef struct elfInfo_s {
     Elf *elf;
 
     int isDSO;
-    int isElf64;		/* is 64bit marker needed in dependencies */
     int isExec;			/* requires are only added to executables */
     int gotDEBUG;
     int gotHASH;
     int gotGNUHASH;
-    int gotSONAME;
+    char *soname;
+    const char *marker;		/* elf class marker or NULL */
 
     ARGV_t requires;
     ARGV_t provides;
@@ -33,6 +34,36 @@ typedef struct elfInfo_s {
 static int skipPrivate(const char *s)
 { 
     return (filter_private && rstreq(s, "GLIBC_PRIVATE"));
+}
+
+static const char *mkmarker(GElf_Ehdr *ehdr)
+{
+    const char *marker = NULL;
+
+    if (ehdr->e_ident[EI_CLASS] == ELFCLASS64) {
+	switch (ehdr->e_machine) {
+	case EM_ALPHA:
+	case EM_FAKE_ALPHA:
+	    /* alpha doesn't traditionally have 64bit markers */
+	    break;
+	default:
+	    marker = "(64bit)";
+	    break;
+	}
+    }
+    return marker;
+}
+
+static void addDep(ARGV_t *deps,
+		   const char *soname, const char *ver, const char *marker)
+{
+    char *dep = NULL;
+    if (ver || marker) {
+	rasprintf(&dep,
+		  "%s(%s)%s", soname, ver ? ver : "", marker ? marker : "");
+    }
+    argvAdd(deps, dep ? dep : soname);
+    free(dep);
 }
 
 static void processVerDef(Elf_Scn *scn, GElf_Shdr *shdr, elfInfo *ei)
@@ -67,11 +98,7 @@ static void processVerDef(Elf_Scn *scn, GElf_Shdr *shdr, elfInfo *ei)
 		    auxoffset += aux->vda_next;
 		    continue;
 		} else if (soname && !soname_only && !skipPrivate(s)) {
-		    const char *marker = ei->isElf64 ? "(64bit)" : "";
-		    char *dep = NULL;
-		    rasprintf(&dep, "%s(%s)%s", soname, s, marker);
-		    argvAdd(&ei->provides, dep);
-		    rfree(dep);
+		    addDep(&ei->provides, soname, s, ei->marker);
 		}
 	    }
 		    
@@ -110,11 +137,7 @@ static void processVerNeed(Elf_Scn *scn, GElf_Shdr *shdr, elfInfo *ei)
 		    break;
 
 		if (ei->isExec && soname && !soname_only && !skipPrivate(s)) {
-		    const char *marker = ei->isElf64 ? "(64bit)" : "";
-		    char *dep = NULL;
-		    rasprintf(&dep, "%s(%s)%s", soname, s, marker);
-		    argvAdd(&ei->requires, dep);
-		    rfree(dep);
+		    addDep(&ei->requires, soname, s, ei->marker);
 		}
 		auxoffset += aux->vna_next;
 	    }
@@ -129,7 +152,6 @@ static void processDynamic(Elf_Scn *scn, GElf_Shdr *shdr, elfInfo *ei)
     Elf_Data *data = NULL;
     while ((data = elf_getdata(scn, data)) != NULL) {
 	for (int i = 0; i < (shdr->sh_size / shdr->sh_entsize); i++) {
-	    ARGV_t *deptype = NULL;
 	    const char *s = NULL;
 	    GElf_Dyn dyn_mem, *dyn;
 
@@ -148,25 +170,17 @@ static void processDynamic(Elf_Scn *scn, GElf_Shdr *shdr, elfInfo *ei)
 		ei->gotDEBUG = 1;
 		break;
 	    case DT_SONAME:
-		ei->gotSONAME = 1;
 		s = elf_strptr(ei->elf, shdr->sh_link, dyn->d_un.d_val);
-		deptype = &ei->provides;
+		if (s)
+		    ei->soname = rstrdup(s);
 		break;
 	    case DT_NEEDED:
 		if (ei->isExec) {
 		    s = elf_strptr(ei->elf, shdr->sh_link, dyn->d_un.d_val);
-		    deptype = &ei->requires;
+		    if (s)
+			addDep(&ei->requires, s, NULL, ei->marker);
 		}
 		break;
-	    default:
-		break;
-	    }
-
-	    if (s && deptype) {
-		const char *marker = ei->isElf64 ? "()(64bit)" : "";
-		char *dep = rstrscat(NULL, s, marker, NULL);
-		argvAdd(deptype, dep);
-		rfree(dep);
 	    }
 	}
     }
@@ -219,12 +233,7 @@ static int processFile(const char *fn, int dtype)
 	goto exit;
 
     if (ehdr->e_type == ET_DYN || ehdr->e_type == ET_EXEC) {
-/* on alpha, everything is 64bit but we dont want the (64bit) markers */
-#if !defined(__alpha__)
-    	ei->isElf64 = (ehdr->e_ident[EI_CLASS] == ELFCLASS64);
-#else
-	ei->isElf64 = 0;
-#endif
+	ei->marker = mkmarker(ehdr);
     	ei->isDSO = (ehdr->e_type == ET_DYN);
 	ei->isExec = (st.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH));
 
@@ -239,15 +248,18 @@ static int processFile(const char *fn, int dtype)
 	argvAdd(&ei->requires, "rtld(GNU_HASH)");
     }
 
-    /* For DSO's, provide the basename of the file if DT_SONAME not found. */
-    if (ei->isDSO && !ei->gotDEBUG && !ei->gotSONAME) {
-	const char *marker = ei->isElf64 ? "()(64bit)" : "";
-	const char *bn = strrchr(fn, '/');
-	char *dep;
-	bn = bn ? bn + 1 : fn;
-	dep = rstrscat(NULL, bn, marker, NULL);
-	argvAdd(&ei->provides, dep);
-	rfree(dep);
+    /*
+     * For DSOs, add DT_SONAME as provide. If its missing, we can fake
+     * it from the basename if requested. The bizarre looking DT_DEBUG
+     * check is used to avoid adding basename provides for PIE executables.
+     */
+    if (ei->isDSO && !ei->gotDEBUG) {
+	if (!ei->soname && fake_soname) {
+	    const char *bn = strrchr(fn, '/');
+	    ei->soname = rstrdup(bn ? bn + 1 : fn);
+	}
+	if (ei->soname)
+	    addDep(&ei->provides, ei->soname, NULL, ei->marker);
     }
 
     rc = 0;
@@ -261,6 +273,7 @@ exit:
     if (ei) {
 	argvFree(ei->provides);
 	argvFree(ei->requires);
+	free(ei->soname);
     	if (ei->elf) elf_end(ei->elf);
 	rfree(ei);
     }
@@ -269,7 +282,6 @@ exit:
 
 int main(int argc, char *argv[])
 {
-    char fn[BUFSIZ];
     int provides = 0;
     int requires = 0;
     poptContext optCon;
@@ -279,6 +291,7 @@ int main(int argc, char *argv[])
 	{ "requires", 'R', POPT_ARG_VAL, &requires, -1, NULL, NULL },
 	{ "filter-private", 0, POPT_ARG_VAL, &filter_private, -1, NULL, NULL },
 	{ "soname-only", 0, POPT_ARG_VAL, &soname_only, -1, NULL, NULL },
+	{ "no-fake-soname", 0, POPT_ARG_VAL, &fake_soname, 0, NULL, NULL },
 	POPT_AUTOHELP 
 	POPT_TABLEEND
     };
@@ -289,9 +302,18 @@ int main(int argc, char *argv[])
 	exit(EXIT_FAILURE);
     }
 
-    while (fgets(fn, sizeof(fn), stdin) != NULL) {
-	fn[strlen(fn)-1] = '\0';
-	(void) processFile(fn, requires);
+    /* Normally our data comes from stdin, but permit args too */
+    if (poptPeekArg(optCon)) {
+	const char *fn;
+	while ((fn = poptGetArg(optCon)) != NULL) {
+	    (void) processFile(fn, requires);
+	}
+    } else {
+	char fn[BUFSIZ];
+	while (fgets(fn, sizeof(fn), stdin) != NULL) {
+	    fn[strlen(fn)-1] = '\0';
+	    (void) processFile(fn, requires);
+	}
     }
 
     poptFreeContext(optCon);

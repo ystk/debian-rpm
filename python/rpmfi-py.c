@@ -5,6 +5,7 @@
 
 #include "header-py.h"
 #include "rpmfi-py.h"
+#include "rpmstrpool-py.h"
 
 struct rpmfiObject_s {
     PyObject_HEAD
@@ -299,13 +300,15 @@ static PyObject * rpmfi_new(PyTypeObject * subtype, PyObject *args, PyObject *kw
     rpmfi fi = NULL;
     rpmTagVal tagN = RPMTAG_BASENAMES;
     int flags = 0;
-    char * kwlist[] = {"header", "tag", "flags", NULL};
+    rpmstrPool pool = NULL;
+    char * kwlist[] = {"header", "tag", "flags", "pool", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&|Oi:rpmfi_init", kwlist,
-				hdrFromPyObject, &h, &to, &flags))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&|OiO&:rpmfi_init", kwlist,
+				hdrFromPyObject, &h, &to, &flags,
+				poolFromPyObject, &pool))
 	return NULL;
 
-    fi = rpmfiNew(NULL, h, tagN, flags);
+    fi = rpmfiNewPool(pool, h, tagN, flags);
 
     if (fi == NULL) {
 	PyErr_SetString(PyExc_ValueError, "invalid file data in header");

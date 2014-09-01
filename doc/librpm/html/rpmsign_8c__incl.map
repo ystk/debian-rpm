@@ -1,6 +1,6 @@
-<map id="G" name="G">
-<area shape="rect" id="node3" href="$system_8h.html" title="system.h" alt="" coords="121,80,196,107"/>
-<area shape="rect" id="node23" href="$cliutils_8h.html" title="cliutils.h" alt="" coords="714,80,784,107"/>
-<area shape="rect" id="node30" href="$debug_8h.html" title="debug.h" alt="" coords="815,80,883,107"/>
-<area shape="rect" id="node7" href="$rpmutil_8h.html" title="rpmio/rpmutil.h" alt="" coords="105,155,212,181"/>
+<map id="rpmsign.c" name="rpmsign.c">
+<area shape="rect" id="node2" href="$system_8h.html" title="system.h" alt="" coords="187,80,263,107"/>
+<area shape="rect" id="node13" href="$cliutils_8h.html" title="cliutils.h" alt="" coords="781,80,851,107"/>
+<area shape="rect" id="node16" href="$debug_8h.html" title="debug.h" alt="" coords="882,80,949,107"/>
+<area shape="rect" id="node4" href="$rpmutil_8h.html" title="rpmio/rpmutil.h" alt="" coords="105,155,212,181"/>
 </map>

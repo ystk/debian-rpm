@@ -1,5 +1,5 @@
 AC_PREREQ(2.61)
-AC_INIT(rpm, 4.10.0, rpm-maint@lists.rpm.org)
+AC_INIT(rpm, 4.11.2, rpm-maint@lists.rpm.org)
 
 AC_CONFIG_SRCDIR([rpmqv.c])
 AC_CONFIG_HEADERS([config.h])
@@ -37,20 +37,19 @@ fi
 AS=${AS-as}
 AC_SUBST(AS)
 if test "$GCC" = yes; then
-    CFLAGS="$CFLAGS -fPIC -DPIC -D_REENTRANT -Wall -Wpointer-arith -Wmissing-prototypes -Wstrict-prototypes"
     cflags_to_try="-fno-strict-aliasing -fstack-protector -Wempty-body"
     AC_MSG_CHECKING([supported compiler flags])
     old_cflags=$CFLAGS
     echo
     for flag in $cflags_to_try; do
-        CFLAGS="$CFLAGS $flag"
+        CFLAGS="$CFLAGS $flag -Werror"
         AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[return 0;]])],[
                 echo "   $flag"
                 RPMCFLAGS="$RPMCFLAGS $flag"
         ],[])
         CFLAGS=$old_cflags
     done
-    CFLAGS="$CFLAGS $RPMCFLAGS"
+    CFLAGS="$CFLAGS -fPIC -DPIC -D_REENTRANT -Wall -Wpointer-arith -Wmissing-prototypes -Wstrict-prototypes $RPMCFLAGS"
 fi
 export CFLAGS
 
@@ -91,7 +90,7 @@ fi
 dnl
 dnl Find some common programs
 dnl
-AC_PATH_PROG(__7ZIP, 7zip, /usr/bin/7za, $MYPATH)
+AC_PATH_PROGS(__7ZIP, [7zip 7za 7z], /usr/bin/7za, $MYPATH)
 AC_PATH_PROG(__BZIP2, bzip2, /usr/bin/bzip2, $MYPATH)
 AC_PATH_PROG(__CAT, cat, /bin/cat, $MYPATH)
 AC_PATH_PROG(__CHGRP, chgrp, /bin/chgrp, $MYPATH)
@@ -141,6 +140,11 @@ AC_PATH_PROG(__NM, nm, /usr/bin/nm, $MYPATH)
 AC_PATH_PROG(__OBJCOPY, objcopy, /usr/bin/objcopy, $MYPATH)
 AC_PATH_PROG(__OBJDUMP, objdump, /usr/bin/objdump, $MYPATH)
 AC_PATH_PROG(__STRIP, strip, /usr/bin/strip, $MYPATH)
+
+AC_PATH_PROG(__GIT, git, /usr/bin/git, $MYPATH)
+AC_PATH_PROG(__HG, hg, /usr/bin/hg, $MYPATH)
+AC_PATH_PROG(__BZR, bzr, /usr/bin/bzr, $MYPATH)
+AC_PATH_PROG(__QUILT, quilt, /usr/bin/quilt, $MYPATH)
 
 AC_PATH_PROG(__FAKECHROOT, fakechroot, no, $MYPATH)
 AM_CONDITIONAL(HAVE_FAKECHROOT, [test "$__FAKECHROOT" != "no"])
@@ -239,20 +243,56 @@ AC_CHECK_HEADERS([dwarf.h], [
 AM_CONDITIONAL(LIBDWARF,[test "$WITH_LIBDWARF" = yes])
 
 #=================
+# Check for beecrypt library if requested.
+AC_ARG_WITH(beecrypt, [  --with-beecrypt         build with beecrypt support ],,[with_beecrypt=no])
+AC_ARG_WITH(internal_beecrypt, [  --with-internal-beecrypt build with internal beecrypt library ],,[with_internal_beecrypt=no])
+AM_CONDITIONAL([WITH_INTERNAL_BEECRYPT],[test "$with_internal_beecrypt" = yes])
+if test "$with_internal_beecrypt" = yes ; then
+  with_beecrypt=yes
+fi
+AM_CONDITIONAL([WITH_BEECRYPT],[test "$with_beecrypt" = yes])
+
+WITH_BEECRYPT_INCLUDE=
+WITH_BEECRYPT_LIB=
+if test "$with_beecrypt" = yes ; then
+  AC_DEFINE(WITH_BEECRYPT, 1, [Build with beecrypt instead of nss3 support?])
+  if test "$with_internal_beecrypt" = yes ; then
+    WITH_BEECRYPT_INCLUDE="-I\$(top_srcdir)/beecrypt"
+    AC_DEFINE(HAVE_BEECRYPT_API_H, 1, [Define to 1 if you have the <beecrypt/api.h> header file.])
+  else
+    AC_CHECK_LIB(beecrypt, mpfprintln, [
+      WITH_BEECRYPT_LIB="-lbeecrypt"
+    ],[
+      AC_MSG_ERROR([missing required library 'beecrypt']) 
+    ])
+    AC_CHECK_HEADER([beecrypt/api.h], [AC_DEFINE(HAVE_BEECRYPT_API_H, 1, [Define to 1 if you have the <beecrypt/api.h> header file.])
+    ])
+  fi
+fi
+AC_SUBST(WITH_BEECRYPT_LIB)
+AC_SUBST(WITH_BEECRYPT_INCLUDE)
+
+#=================
 # Check for NSS library.
 # We need nss.h from NSS which needs nspr.h. Unfortunately both glibc and NSS 
 # have a header named nss.h... so make extra check for NSS's sechash.h 
 # which we use too and hopefully is slightly more unique to NSS.
 WITH_NSS_INCLUDE=
 WITH_NSS_LIB=
+if test "$with_beecrypt" != yes ; then
 AC_CHECK_HEADERS([nspr.h nss.h sechash.h], [], [
   AC_MSG_ERROR([missing required NSPR / NSS header])
 ])
-AC_CHECK_LIB(nss3, NSS_NoDB_Init, [
+AC_CHECK_LIB(nss3, VFY_VerifyDigestDirect, [
   WITH_NSS_LIB=-lnss3
+  AC_CHECK_LIB(nss3, NSS_InitContext, [
+    AC_DEFINE(HAVE_NSS_INITCONTEXT, 1, [Define to 1 if NSS has NSS_InitContext])
+    AC_SUBST(HAVE_NSS_INITCONTEXT, [1])
+  ])
 ], [
-  AC_MSG_ERROR([missing required NSS library 'nss3'])
+  AC_MSG_ERROR([required NSS library 'nss3' missing or too old])
 ])
+fi
 AC_SUBST(WITH_NSS_INCLUDE)
 AC_SUBST(WITH_NSS_LIB)
 
@@ -346,8 +386,6 @@ AC_CHECK_HEADERS(sys/utsname.h)
 
 AC_CHECK_HEADERS(sys/systemcfg.h)
 AC_CHECK_HEADERS(sys/param.h)
-
-AC_CHECK_HEADERS(glob.h)
 
 dnl statfs portability fiddles.
 dnl
@@ -477,27 +515,19 @@ AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 
 dnl Checks for library functions.
-AC_FUNC_MMAP
-
 AC_CHECK_FUNCS(putenv)
+AC_CHECK_FUNCS(mempcpy)
+AC_CHECK_FUNCS(fdatasync)
+AC_CHECK_FUNCS(getauxval)
 
 AC_REPLACE_FUNCS(stpcpy stpncpy)
 
-AC_CHECK_FUNCS(__secure_getenv)
+AC_CHECK_FUNCS([secure_getenv __secure_getenv])
 
 AC_CHECK_FUNCS(
    [mkstemp getcwd basename dirname realpath setenv unsetenv regcomp lchown],
    [], [AC_MSG_ERROR([function required by rpm])])
 
-dnl XXX Glob *is* broken on linux with libc5, solaris and possibly aix when
-dnl %files gets something like
-dnl	/usr/*/locale/*/LC_MESSAGES/*.mo
-dnl (Note: more than one asterisk in glob pattern.)
-dnl
-dnl XXX Glob is "fixed" in glibc-2.3.3-61, but the cost is that
-dnl dangling symlinks are no longer globbed. Always use the internal glob.
-AC_DEFINE(USE_GNU_GLOB, 1, [Use the included glob.c?])
-AC_LIBOBJ(glob)
 AC_LIBOBJ(fnmatch)
 
 dnl check if python is requested
@@ -766,7 +796,7 @@ for reqscript in ${host_cpu}-${host_os_exact}.req ${host_os_exact}.req ${host_os
        else
 	  echo "using ${srcdir}/autodeps/${reqscript} for automatic requires generation"
        fi
-       ln -sf ${reqscript} ./autodeps/find-requires
+       ln -sf ${reqscript} ${srcdir}/autodeps/find-requires
        break
     fi
 } done

@@ -226,6 +226,7 @@ static struct
 #define DEBUG_RANGES	10
 #define DEBUG_TYPES	11
 #define DEBUG_MACRO	12
+#define DEBUG_GDB_SCRIPT	13
     { ".debug_info", NULL, NULL, 0, 0, 0 },
     { ".debug_abbrev", NULL, NULL, 0, 0, 0 },
     { ".debug_line", NULL, NULL, 0, 0, 0 },
@@ -239,6 +240,7 @@ static struct
     { ".debug_ranges", NULL, NULL, 0, 0, 0 },
     { ".debug_types", NULL, NULL, 0, 0, 0 },
     { ".debug_macro", NULL, NULL, 0, 0, 0 },
+    { ".debug_gdb_scripts", NULL, NULL, 0, 0, 0 },
     { NULL, NULL, NULL, 0, 0, 0 }
   };
 
@@ -482,6 +484,10 @@ edit_dwarf2_line (DSO *dso, uint32_t off, char *comp_dir, int phase)
   size_t abs_file_cnt = 0, abs_dir_cnt = 0;
 
   if (phase != 0)
+    return 0;
+
+  /* XXX: RhBug:929365, should we error out instead of ignoring? */
+  if (ptr == NULL)
     return 0;
 
   ptr += off;
@@ -1154,6 +1160,12 @@ edit_dwarf2 (DSO *dso)
 		  if (rtype != R_ALPHA_REFLONG)
 		    goto fail;
 		  break;
+#if defined(EM_AARCH64) && defined(R_AARCH64_ABS32)
+		case EM_AARCH64:
+		  if (rtype != R_AARCH64_ABS32)
+		    goto fail;
+		  break;
+#endif
 		default:
 		fail:
 		  error (1, 0, "%s: Unhandled relocation %d in .debug_info section",

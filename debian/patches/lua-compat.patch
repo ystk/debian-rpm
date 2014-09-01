@@ -1,0 +1,42 @@
+Subject: Avoid undefined functions with Lua 5.2
+From: Michal Čihař <nijel@debian.org>
+--- a/lib/rpmliblua.c
++++ b/lib/rpmliblua.c
+@@ -1,6 +1,7 @@
+ #include "system.h"
+ 
+ #ifdef WITH_LUA
++#define LUA_COMPAT_MODULE 1
+ #include <lua.h>
+ #include <lauxlib.h>
+ #include <rpm/rpmlib.h>
+--- a/luaext/lposix.c
++++ b/luaext/lposix.c
+@@ -31,6 +31,7 @@
+ #define MYNAME		"posix"
+ #define MYVERSION	MYNAME " library for " LUA_VERSION " / Nov 2003"
+ 
++#define LUA_COMPAT_MODULE 1
+ #include "lua.h"
+ #include "lauxlib.h"
+ #include "lposix.h"
+--- a/luaext/lrexlib.c
++++ b/luaext/lrexlib.c
+@@ -7,6 +7,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#define LUA_COMPAT_MODULE 1
+ #include "lua.h"
+ #include "lauxlib.h"
+ #include "lrexlib.h"
+--- a/rpmio/rpmlua.c
++++ b/rpmio/rpmlua.c
+@@ -1,6 +1,7 @@
+ #include "system.h"
+ 
+ #ifdef	WITH_LUA
++#define LUA_COMPAT_MODULE 1
+ #include <lua.h>
+ #include <lualib.h>
+ #include <lauxlib.h>

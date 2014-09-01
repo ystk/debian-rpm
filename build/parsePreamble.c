@@ -22,6 +22,8 @@
 #define SKIPWHITE(_x)	{while(*(_x) && (risspace(*_x) || *(_x) == ',')) (_x)++;}
 #define SKIPNONWHITE(_x){while(*(_x) &&!(risspace(*_x) || *(_x) == ',')) (_x)++;}
 
+#define WHITELIST_NAME ".-_+%{}"
+
 /**
  */
 static const rpmTagVal copyTagsDuringParse[] = {
@@ -333,7 +335,6 @@ typedef const struct tokenBits_s {
  */
 static struct tokenBits_s const installScriptBits[] = {
     { "interp",		RPMSENSE_INTERP },
-    { "prereq",		RPMSENSE_PREREQ },
     { "preun",		RPMSENSE_SCRIPT_PREUN },
     { "pre",		RPMSENSE_SCRIPT_PRE },
     { "postun",		RPMSENSE_SCRIPT_POSTUN },
@@ -536,30 +537,6 @@ static void fillOutMainPackage(Header h)
     }
 }
 
-static int getSpecialDocDir(Package pkg)
-{
-    const char *errstr, *docdir_fmt = "%{NAME}-%{VERSION}";
-    char *fmt_macro, *fmt; 
-    int rc = -1;
-
-    fmt_macro = rpmExpand("%{?_docdir_fmt}", NULL);
-    if (fmt_macro && strlen(fmt_macro) > 0) {
-	docdir_fmt = fmt_macro;
-    }
-    fmt = headerFormat(pkg->header, docdir_fmt, &errstr);
-    if (!fmt) {
-	rpmlog(RPMLOG_ERR, _("illegal _docdir_fmt: %s\n"), errstr);
-	goto exit;
-    }
-    pkg->specialDocDir = rpmGetPath("%{_docdir}/", fmt, NULL);
-    rc = 0;
-
-exit:
-    free(fmt);
-    free(fmt_macro);
-    return rc;
-}
-
 /**
  */
 static rpmRC readIcon(Header h, const char * file)
@@ -692,9 +669,12 @@ static rpmRC handlePreambleTag(rpmSpec spec, Package pkg, rpmTagVal tag,
     switch (tag) {
     case RPMTAG_NAME:
 	SINGLE_TOKEN_ONLY;
-	if (rpmCharCheck(spec, field, strlen(field), ".-_+%{}"))
+	if (rpmCharCheck(spec, field, strlen(field), WHITELIST_NAME))
 	   goto exit;
 	headerPutString(pkg->header, tag, field);
+	/* Main pkg name is unknown at the start, populate as soon as we can */
+	if (pkg == spec->packages)
+	    pkg->name = rpmstrPoolId(spec->pool, field, 1);
 	break;
     case RPMTAG_VERSION:
     case RPMTAG_RELEASE:
@@ -798,22 +778,23 @@ static rpmRC handlePreambleTag(rpmSpec spec, Package pkg, rpmTagVal tag,
 	break;
     case RPMTAG_ORDERFLAGS:
     case RPMTAG_REQUIREFLAGS:
-    case RPMTAG_PREREQ:
 	if (parseBits(lang, installScriptBits, &tagflags)) {
 	    rpmlog(RPMLOG_ERR, _("line %d: Bad %s: qualifiers: %s\n"),
 		     spec->lineNum, rpmTagGetName(tag), spec->line);
 	    goto exit;
 	}
+	/* fallthrough */
+    case RPMTAG_PREREQ:
+    case RPMTAG_CONFLICTFLAGS:
+    case RPMTAG_OBSOLETEFLAGS:
+    case RPMTAG_PROVIDEFLAGS:
 	if (parseRCPOT(spec, pkg, field, tag, 0, tagflags))
 	    goto exit;
 	break;
     case RPMTAG_BUILDPREREQ:
     case RPMTAG_BUILDREQUIRES:
     case RPMTAG_BUILDCONFLICTS:
-    case RPMTAG_CONFLICTFLAGS:
-    case RPMTAG_OBSOLETEFLAGS:
-    case RPMTAG_PROVIDEFLAGS:
-	if (parseRCPOT(spec, pkg, field, tag, 0, tagflags))
+	if (parseRCPOT(spec, spec->sourcePackage, field, tag, 0, tagflags))
 	    goto exit;
 	break;
     case RPMTAG_EXCLUDEARCH:
@@ -997,8 +978,6 @@ int parsePreamble(rpmSpec spec, int initialPackage)
     char *NVR = NULL;
     char lang[BUFSIZ];
 
-    pkg = newPackage(spec);
-	
     if (! initialPackage) {
 	/* There is one option to %package: <pkg> or -n <pkg> */
 	if (parseSimplePart(spec->line, &name, &flag)) {
@@ -1006,6 +985,9 @@ int parsePreamble(rpmSpec spec, int initialPackage)
 			spec->line);
 	    goto exit;
 	}
+
+	if (rpmCharCheck(spec, name, strlen(name), WHITELIST_NAME))
+	    goto exit;
 	
 	if (!lookupPackage(spec, name, flag, NULL)) {
 	    rpmlog(RPMLOG_ERR, _("Package already exists: %s\n"), spec->line);
@@ -1020,9 +1002,13 @@ int parsePreamble(rpmSpec spec, int initialPackage)
 	} else
 	    NVR = xstrdup(name);
 	free(name);
+	pkg = newPackage(NVR, spec->pool, &spec->packages);
 	headerPutString(pkg->header, RPMTAG_NAME, NVR);
     } else {
 	NVR = xstrdup("(main package)");
+	pkg = newPackage(NULL, spec->pool, &spec->packages);
+	spec->sourcePackage = newPackage(NULL, spec->pool, NULL);
+	
     }
 
     if ((rc = readLine(spec, STRIP_TRAILINGSPACE | STRIP_COMMENTS)) > 0) {
@@ -1110,10 +1096,6 @@ int parsePreamble(rpmSpec spec, int initialPackage)
 	goto exit;
     }
 
-    if (getSpecialDocDir(pkg)) {
-	goto exit;
-    }
-	
     /* if we get down here nextPart has been set to non-error */
     res = nextPart;
 

@@ -58,6 +58,7 @@ pkginclude_HEADERS += rpmio/rpmlog.h
 pkginclude_HEADERS += rpmio/rpmpgp.h
 pkginclude_HEADERS += rpmio/rpmsq.h
 pkginclude_HEADERS += rpmio/rpmstring.h
+pkginclude_HEADERS += rpmio/rpmstrpool.h
 pkginclude_HEADERS += rpmio/rpmsw.h
 pkginclude_HEADERS += rpmio/rpmfileutil.h
 pkginclude_HEADERS += rpmio/rpmutil.h
@@ -183,13 +184,13 @@ rpmrc: $(top_srcdir)/rpmrc.in
 CLEANFILES += rpmrc.tmp rpmrc
 EXTRA_DIST += rpmrc.in
 
-rpmconfig_DATA += macros
+noinst_DATA = macros
 macros: $(top_srcdir)/macros.in
 	  ( cd $(top_builddir) && ./config.status --file=${subdir}/macros:${subdir}/macros.in )
 CLEANFILES += macros
 EXTRA_DIST += macros.in
 
-noinst_DATA = platform
+noinst_DATA += platform
 platform: $(top_srcdir)/platform.in
 	@$(SED) \
 	  -e "s,[@]RPMCONFIGDIR[@],$(rpmconfigdir),g" \
@@ -231,7 +232,7 @@ install-exec-hook:
 install-data-local:
 	DESTDIR="$(DESTDIR)" pkglibdir="$(rpmconfigdir)" \
 		$(SHELL) $(top_srcdir)/installplatform \
-			rpmrc platform \
+			rpmrc platform macros \
 			$(RPMCANONVENDOR) $(RPMCANONOS) $(RPMCANONGNU)
 	@$(MKDIR_P) $(DESTDIR)$(localstatedir)/tmp
 
@@ -240,6 +241,7 @@ uninstall-local:
 	@rm -f $(DESTDIR)$(bindir)/rpmquery
 	@rm -f $(DESTDIR)$(bindir)/rpmverify
 	@rm -rf $(DESTDIR)$(rpmconfigdir)/platform/
+	@rm -f $(DESTDIR)$(rpmconfigdir)/macros
 
 MAINTAINERCLEANFILES = ChangeLog
 

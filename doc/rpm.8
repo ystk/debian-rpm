@@ -19,9 +19,6 @@ rpm \- RPM Package Manager
 
 
 
-\fBrpm\fR [\fB--nosignature\fR] [\fB--nodigest\fR]
-    \fB\fIPACKAGE_FILE\fB\fR\fI ...\fR
-
 .SS "INSTALLING, UPGRADING, AND REMOVING PACKAGES:"
 .PP
 
@@ -169,6 +166,9 @@ will be run after a chroot(2) to
 .TP
 \fB-D, --define='\fIMACRO EXPR\fB'\fR
 Defines \fIMACRO\fR with value \fIEXPR\fR.
+.TP
+\fB--undefine='\fIMACRO\fB'\fR
+Undefines \fIMACRO\fR.
 .TP
 \fB-E, --eval='\fIEXPR\fB'\fR
 Prints macro expansion of \fIEXPR\fR.
@@ -607,6 +607,9 @@ This uses the \fB--queryformat\fR if one was specified.
 Orders the package listing by install time such that the latest
 packages are at the top.
 .TP
+\fB-L, --licensefiles\fR
+List only license files (implies \fB-l\fR).
+.TP
 \fB-l, --list\fR
 List files in package.
 .TP
@@ -722,17 +725,22 @@ the corresponding \fB--verify\fR test:
 \fBP\fR ca\fBP\fRabilities differ
 .fi
 
-.SS "SHOWRC"
+.SS "MISCELLANEOUS COMMANDS"
 .PP
-The command
-.PP
+.TP
 \fBrpm\fR \fB--showrc\fR
-.PP
 shows the values \fBrpm\fR will use for all of the
 options are currently set in
 \fIrpmrc\fR and
 \fImacros\fR
 configuration file(s).
+.TP
+\fBrpm\fR \fB--setperms\fR \fIPACKAGE_NAME\fR
+sets permissions of files in the given package.
+.TP
+\fBrpm\fR \fB--setugids\fR \fIPACKAGE_NAME\fR
+sets user/group ownership of files in the given package.
+
 .SS "FTP/HTTP OPTIONS"
 .PP
 \fBrpm\fR can act as an FTP and/or HTTP client so

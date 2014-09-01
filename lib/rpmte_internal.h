@@ -67,6 +67,9 @@ void rpmteAddDepProblem(rpmte te, const char * pkgNEVR, rpmds ds,
 		        fnpyKey * suggestedKeys);
 
 RPM_GNUC_INTERNAL
+void rpmteAddRelocProblems(rpmte te);
+
+RPM_GNUC_INTERNAL
 const char * rpmteTypeString(rpmte te);
 
 RPM_GNUC_INTERNAL
@@ -74,6 +77,9 @@ tsortInfo rpmteTSI(rpmte te);
 
 RPM_GNUC_INTERNAL
 void rpmteSetTSI(rpmte te, tsortInfo tsi);
+
+RPM_GNUC_INTERNAL
+int rpmteHaveTransScript(rpmte te, rpmTagVal tag);
 
 /* XXX should be internal too but build code needs for now... */
 rpmfs rpmteGetFileStates(rpmte te);

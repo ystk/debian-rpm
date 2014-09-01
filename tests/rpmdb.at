@@ -162,6 +162,30 @@ runroot rpm -i \
 
 AT_CLEANUP
 
+AT_SETUP([rpmdb --rebuilddb])
+AT_KEYWORDS([rpmdb])
+AT_CHECK([
+RPMDB_CLEAR
+RPMDB_INIT
+
+runroot rpm -U --noscripts --nodeps --ignorearch \
+  /data/RPMS/hello-1.0-1.i386.rpm
+runroot rpm -qa --qf "%{nevra} %{dbinstance}\n"
+runroot rpm -U --noscripts --nodeps --ignorearch \
+  /data/RPMS/hello-2.0-1.i686.rpm
+runroot rpm -qa --qf "%{nevra} %{dbinstance}\n"
+runroot rpmdb --rebuilddb
+runroot rpm -qa --qf "%{nevra} %{dbinstance}\n"
+],
+[],
+[hello-1.0-1.i386 1
+hello-2.0-1.i686 2
+hello-2.0-1.i686 1
+],
+[])
+AT_CLEANUP
+
+
 # ------------------------------
 # Install and verify status
 AT_SETUP([rpm -U and verify status])
@@ -202,6 +226,7 @@ runroot rpm -qls flangtest
 ],
 [0],
 [normal        /usr/share/flangtest/de.txt
+normal        /usr/share/flangtest/empty.txt
 not installed /usr/share/flangtest/en.txt
 normal        /usr/share/flangtest/fi.txt
 normal        /usr/share/flangtest/none.txt
@@ -218,7 +243,7 @@ AT_CHECK([
 RPMDB_CLEAR
 RPMDB_INIT
 rm -rf "${TOPDIR}"
-rm -rf "${RPMTEST}"/opt/mydir
+rm -rf "${RPMTEST}"/opt/*
 
 runroot rpmbuild --quiet -bb /data/SPECS/selfconflict.spec
 runroot rpm -U "${TOPDIR}"/RPMS/noarch/selfconflict-1.0-1.noarch.rpm
@@ -239,7 +264,7 @@ AT_CHECK([
 RPMDB_CLEAR
 RPMDB_INIT
 rm -rf "${TOPDIR}"
-rm -rf "${RPMTEST}"/opt/mydir
+rm -rf "${RPMTEST}"/opt/*
 
 runroot rpmbuild --quiet -bb /data/SPECS/selfconflict.spec
 runroot rpm -U "${TOPDIR}"/RPMS/noarch/selfconflict-1.0-1.noarch.rpm

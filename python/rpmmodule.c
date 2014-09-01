@@ -16,6 +16,7 @@
 #include "rpmii-py.h"
 #include "rpmps-py.h"
 #include "rpmmacro-py.h"
+#include "rpmstrpool-py.h"
 #include "rpmtd-py.h"
 #include "rpmte-py.h"
 #include "rpmts-py.h"
@@ -223,6 +224,7 @@ static int prepareInitModule(void)
     if (PyType_Ready(&rpmii_Type) < 0) return 0;
     if (PyType_Ready(&rpmProblem_Type) < 0) return 0;
     if (PyType_Ready(&rpmPubkey_Type) < 0) return 0;
+    if (PyType_Ready(&rpmstrPool_Type) < 0) return 0;
 #if 0
     if (PyType_Ready(&rpmtd_Type) < 0) return 0;
 #endif
@@ -294,7 +296,9 @@ static int initModule(PyObject *m)
     if (Py_AtExit(rpm_exithook) == -1)
         return 0;
 
-    rpmReadConfigFiles(NULL, NULL);
+    /* failure to initialize rpm (crypto and all) is rather fatal too... */
+    if (rpmReadConfigFiles(NULL, NULL) == -1)
+	return 0;
 
     d = PyModule_GetDict(m);
 
@@ -329,6 +333,9 @@ static int initModule(PyObject *m)
     Py_INCREF(&rpmPubkey_Type);
     PyModule_AddObject(m, "pubkey", (PyObject *) &rpmPubkey_Type);
 
+    Py_INCREF(&rpmstrPool_Type);
+    PyModule_AddObject(m, "strpool", (PyObject *) &rpmstrPool_Type);
+
 #if 0
     Py_INCREF(&rpmtd_Type);
     PyModule_AddObject(m, "td", (PyObject *) &rpmtd_Type);
@@ -362,13 +369,13 @@ static int initModule(PyObject *m)
 
     REGISTER_ENUM(RPMFILE_CONFIG);
     REGISTER_ENUM(RPMFILE_DOC);
+    REGISTER_ENUM(RPMFILE_ICON);
     REGISTER_ENUM(RPMFILE_MISSINGOK);
     REGISTER_ENUM(RPMFILE_NOREPLACE);
+    REGISTER_ENUM(RPMFILE_SPECFILE);
     REGISTER_ENUM(RPMFILE_GHOST);
     REGISTER_ENUM(RPMFILE_LICENSE);
     REGISTER_ENUM(RPMFILE_README);
-    REGISTER_ENUM(RPMFILE_EXCLUDE);
-    REGISTER_ENUM(RPMFILE_UNPATCHED);
     REGISTER_ENUM(RPMFILE_PUBKEY);
 
     REGISTER_ENUM(RPMDEP_SENSE_REQUIRES);

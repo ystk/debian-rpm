@@ -13,6 +13,9 @@
 /* Define to 1 if you have the `basename' function. */
 #undef HAVE_BASENAME
 
+/* Define to 1 if you have the <beecrypt/api.h> header file. */
+#undef HAVE_BEECRYPT_API_H
+
 /* Define to 1 if you have the <bzlib.h> header file. */
 #undef HAVE_BZLIB_H
 
@@ -50,8 +53,14 @@
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
 
+/* Define to 1 if you have the `fdatasync' function. */
+#undef HAVE_FDATASYNC
+
 /* Define to 1 if you have the <gelf.h> header file. */
 #undef HAVE_GELF_H
+
+/* Define to 1 if you have the `getauxval' function. */
+#undef HAVE_GETAUXVAL
 
 /* Define to 1 if you have the `getcwd' function. */
 #undef HAVE_GETCWD
@@ -59,17 +68,11 @@
 /* Define to 1 if you have the <getopt.h> header file. */
 #undef HAVE_GETOPT_H
 
-/* Define to 1 if you have the `getpagesize' function. */
-#undef HAVE_GETPAGESIZE
-
 /* Define to 1 if you have the `getpassphrase' function. */
 #undef HAVE_GETPASSPHRASE
 
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #undef HAVE_GETTEXT
-
-/* Define to 1 if you have the <glob.h> header file. */
-#undef HAVE_GLOB_H
 
 /* Define as 1 if your zlib has gzseek() */
 #undef HAVE_GZSEEK
@@ -110,11 +113,11 @@
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
 
+/* Define to 1 if you have the `mempcpy' function. */
+#undef HAVE_MEMPCPY
+
 /* Define to 1 if you have the `mkstemp' function. */
 #undef HAVE_MKSTEMP
-
-/* Define to 1 if you have a working `mmap' system call. */
-#undef HAVE_MMAP
 
 /* Define to 1 if you have the <ndir.h> header file, and it defines `DIR'. */
 #undef HAVE_NDIR_H
@@ -124,6 +127,9 @@
 
 /* Define to 1 if you have the <nss.h> header file. */
 #undef HAVE_NSS_H
+
+/* Define to 1 if NSS has NSS_InitContext */
+#undef HAVE_NSS_INITCONTEXT
 
 /* Define if the patch call you'll be using is 2.1 or older */
 #undef HAVE_OLDPATCH_21
@@ -142,6 +148,9 @@
 
 /* Define to 1 if you have the <sechash.h> header file. */
 #undef HAVE_SECHASH_H
+
+/* Define to 1 if you have the `secure_getenv' function. */
+#undef HAVE_SECURE_GETENV
 
 /* Define to 1 if you have the `setenv' function. */
 #undef HAVE_SETENV
@@ -259,9 +268,6 @@
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
-/* Use the included glob.c? */
-#undef USE_GNU_GLOB
-
 /* Enable extensions on AIX 3, Interix.  */
 #ifndef _ALL_SOURCE
 # undef _ALL_SOURCE
@@ -290,6 +296,9 @@
 /* Build with acl support? */
 #undef WITH_ACL
 
+/* Build with beecrypt instead of nss3 support? */
+#undef WITH_BEECRYPT
+
 /* Build with capability support? */
 #undef WITH_CAP
 
@@ -298,6 +307,11 @@
 
 /* Build with selinux support? */
 #undef WITH_SELINUX
+
+/* Enable large inode numbers on Mac OS X 10.5.  */
+#ifndef _DARWIN_USE_64_BIT_INODE
+# define _DARWIN_USE_64_BIT_INODE 1
+#endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */
 #undef _FILE_OFFSET_BITS

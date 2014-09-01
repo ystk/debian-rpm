@@ -11,13 +11,16 @@
 #if HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
-#include <netdb.h>
 #include <ctype.h>	/* XXX for /etc/rpm/platform contents */
 
 #if HAVE_SYS_SYSTEMCFG_H
 #include <sys/systemcfg.h>
 #else
 #define __power_pc() 0
+#endif
+
+#ifdef HAVE_GETAUXVAL
+#include <sys/auxv.h>
 #endif
 
 #include <rpm/rpmlib.h>			/* RPM_MACTABLE*, Rc-prototypes */
@@ -30,6 +33,7 @@
 #include "rpmio/rpmio_internal.h"	/* XXX for rpmioSlurp */
 #include "lib/misc.h"
 #include "lib/rpmliblua.h"
+#include "lib/rpmug.h"
 
 #include "debug.h"
 
@@ -121,6 +125,7 @@ static struct tableType_s tables[RPM_MACHTABLE_COUNT] = {
 /* XXX get rid of this stuff... */
 /* Stuff for maintaining "variables" like SOURCEDIR, BUILDDIR, etc */
 #define RPMVAR_OPTFLAGS                 3
+#define RPMVAR_ARCHCOLOR                42
 #define RPMVAR_INCLUDE                  43
 #define RPMVAR_MACROFILES               49
 
@@ -130,6 +135,7 @@ static struct tableType_s tables[RPM_MACHTABLE_COUNT] = {
 /* The order of the flags is archSpecific, macroize, localize */
 
 static const struct rpmOption optionTable[] = {
+    { "archcolor",		RPMVAR_ARCHCOLOR,               1, 0, 0 },
     { "include",		RPMVAR_INCLUDE,			0, 0, 2 },
     { "macrofiles",		RPMVAR_MACROFILES,		0, 0, 1 },
     { "optflags",		RPMVAR_OPTFLAGS,		1, 1, 0 },
@@ -435,6 +441,7 @@ static void setDefaults(void)
 #ifndef MACROFILES
     if (!macrofiles) {
 	macrofiles = rstrscat(NULL, confdir, "/macros", ":",
+				confdir, "/macros.d/macros.*", ":",
 				confdir, "/platform/%{_target}/macros", ":",
 				confdir, "/fileattrs/*.attr", ":",
   				confdir, "/" RPMCANONVENDOR "/macros", ":",
@@ -909,13 +916,19 @@ static int is_geode(void)
 
 #if defined(__linux__)
 /**
- * Populate rpmat structure with parsed info from /proc/self/auxv
+ * Populate rpmat structure with auxv values
  */
-static void parse_auxv(void)
+static void read_auxv(void)
 {
     static int oneshot = 1;
 
     if (oneshot) {
+#ifdef HAVE_GETAUXVAL
+	rpmat.platform = (char *) getauxval(AT_PLATFORM);
+	if (!rpmat.platform)
+	    rpmat.platform = "";
+	rpmat.hwcap = getauxval(AT_HWCAP);
+#else
 	rpmat.platform = "";
 	int fd = open("/proc/self/auxv", O_RDONLY);
 
@@ -940,6 +953,7 @@ static void parse_auxv(void)
 	    }
 	    close(fd);
 	}
+#endif
 	oneshot = 0; /* only try once even if it fails */
     }
     return;
@@ -959,7 +973,7 @@ static void defaultMachine(const char ** arch,
 
 #if defined(__linux__)
     /* Populate rpmat struct with hw info */
-    parse_auxv();
+    read_auxv();
 #endif
 
     while (!gotDefaults) {
@@ -1089,11 +1103,16 @@ static void defaultMachine(const char ** arch,
 #	endif	/* sparc*-linux */
 
 #	if defined(__linux__) && defined(__powerpc__)
+#	if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	{
             int powerlvl;
-            if (sscanf(rpmat.platform, "power%d", &powerlvl) == 1 && powerlvl > 6)
+            if (!rstreq(un.machine, "ppc") &&
+		    sscanf(rpmat.platform, "power%d", &powerlvl) == 1 &&
+		    powerlvl > 6) {
                 strcpy(un.machine, "ppc64p7");
+	    }
         }
+#	endif	/* __ORDER_BIG_ENDIAN__ */
 #	endif	/* ppc64*-linux */
 
 #	if defined(__GNUC__) && defined(__alpha__)
@@ -1351,6 +1370,28 @@ void rpmGetArchInfo(const char ** name, int * num)
     getMachineInfo(ARCH, name, num);
 }
 
+int rpmGetArchColor(const char *arch)
+{
+    const char *color;
+    char *e;
+    int color_i;
+
+    arch = lookupInDefaultTable(arch,
+				tables[currTables[ARCH]].defaults,
+				tables[currTables[ARCH]].defaultsLength);
+    color = rpmGetVarArch(RPMVAR_ARCHCOLOR, arch);
+    if (color == NULL) {
+	return -1;
+    }
+
+    color_i = strtol(color, &e, 10);
+    if (!(e && *e == '\0')) {
+	return -1;
+    }
+
+    return color_i;
+}
+
 void rpmGetOsInfo(const char ** name, int * num)
 {
     getMachineInfo(OS, name, num);
@@ -1578,8 +1619,11 @@ exit:
 int rpmReadConfigFiles(const char * file, const char * target)
 {
     /* Force preloading of dlopen()'ed libraries in case we go chrooting */
-    (void) gethostbyname("localhost");
-    (void) rpmInitCrypto();
+    if (rpmugInit())
+	return -1;
+
+    if (rpmInitCrypto())
+	return -1;
 
     /* Preset target macros */
    	/* FIX: target can be NULL */
@@ -1673,6 +1717,9 @@ int rpmShowRC(FILE * fp)
             fprintf(fp, "    %s\n", DNEVR+2);
     }
     ds = rpmdsFree(ds);
+    fprintf(fp, "\n");
+
+    fprintf(fp, "Macro path: %s\n", macrofiles);
     fprintf(fp, "\n");
 
     rpmDumpMacroTable(NULL, fp);

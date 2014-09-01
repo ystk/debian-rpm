@@ -159,7 +159,6 @@ rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmDbiTagVal rpmtag,
 			const void * keyp, size_t keylen)
 {
     rpmdbMatchIterator mi = NULL;
-    const char * arch = NULL;
     char *tmp = NULL;
 
     if (ts == NULL)
@@ -171,8 +170,8 @@ rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmDbiTagVal rpmtag,
     if (ts->rdb == NULL && rpmtsOpenDB(ts, ts->dbmode))
 	return NULL;
 
-    /* Parse out "N(EVR).A" tokens from a label key. */
-    if (rpmtag == RPMDBI_LABEL && keyp != NULL) {
+    /* Parse out "N(EVR)" tokens from a label key if present */
+    if (rpmtag == RPMDBI_LABEL && keyp != NULL && strchr(keyp, '(')) {
 	const char *se, *s = keyp;
 	char *t;
 	size_t slen = strlen(s);
@@ -219,13 +218,6 @@ rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmDbiTagVal rpmtag,
 	    goto exit;
 	}
 	*t = '\0';
-	t = (char *) keyp;
-	t = strrchr(t, '.');
-	/* Is this a valid ".arch" suffix? */
-	if (t != NULL && rpmIsKnownArch(t+1)) {
-	   *t++ = '\0';
-	   arch = t;
-	}
     }
 
     mi = rpmdbInitIterator(ts->rdb, rpmtag, keyp, keylen);
@@ -233,10 +225,6 @@ rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmDbiTagVal rpmtag,
     /* Verify header signature/digest during retrieve (if not disabled). */
     if (mi && !(ts->vsflags & RPMVSF_NOHDRCHK))
 	(void) rpmdbSetHdrChk(mi, ts, headerCheck);
-
-    /* Select specified arch only. */
-    if (arch != NULL)
-	rpmdbSetIteratorRE(mi, RPMTAG_ARCH, RPMMIRE_DEFAULT, arch);
 
 exit:
     free(tmp);
@@ -458,8 +446,14 @@ rpmRC rpmtsImportPubkey(const rpmts ts, const unsigned char * pkt, size_t pktlen
     Header h = NULL;
     rpmRC rc = RPMRC_FAIL;		/* assume failure */
     rpmPubkey pubkey = NULL;
-    rpmKeyring keyring = rpmtsGetKeyring(ts, 1);
+    rpmVSFlags oflags = rpmtsVSFlags(ts);
+    rpmKeyring keyring;
     int krc;
+
+    /* XXX keyring wont load if sigcheck disabled, force it temporarily */
+    rpmtsSetVSFlags(ts, (oflags & ~_RPMVSF_NOSIGNATURES));
+    keyring = rpmtsGetKeyring(ts, 1);
+    rpmtsSetVSFlags(ts, oflags);
 
     if ((pubkey = rpmPubkeyNew(pkt, pktlen)) == NULL)
 	goto exit;
@@ -562,6 +556,7 @@ void rpmtsClean(rpmts ts)
     rpmtsiFree(pi);
 
     tsmem->addedPackages = rpmalFree(tsmem->addedPackages);
+    tsmem->rpmlib = rpmdsFree(tsmem->rpmlib);
 
     rpmtsCleanProblems(ts);
 }
@@ -591,7 +586,9 @@ void rpmtsEmpty(rpmts ts)
     }
 
     tsmem->orderCount = 0;
-    intHashEmpty(tsmem->removedPackages);
+    /* The pool cannot be emptied, there might be references to its contents */
+    tsmem->pool = rpmstrPoolFree(tsmem->pool);
+    removedHashEmpty(tsmem->removedPackages);
     return;
 }
 
@@ -640,7 +637,7 @@ rpmts rpmtsFree(rpmts ts)
 
     (void) rpmtsCloseDB(ts);
 
-    tsmem->removedPackages = intHashFree(tsmem->removedPackages);
+    tsmem->removedPackages = removedHashFree(tsmem->removedPackages);
     tsmem->order = _free(tsmem->order);
     ts->members = _free(ts->members);
 
@@ -758,7 +755,7 @@ rpmRC rpmtsSELabelInit(rpmts ts, int open_status)
     }
 
     struct selinux_opt opts[] = {
-	{SELABEL_OPT_PATH, path}
+	{ .type = SELABEL_OPT_PATH, .value = path}
     };
 
     if (ts->selabelHandle) {
@@ -934,6 +931,19 @@ tsMembers rpmtsMembers(rpmts ts)
     return (ts != NULL) ? ts->members : NULL;
 }
 
+rpmstrPool rpmtsPool(rpmts ts)
+{
+    tsMembers tsmem = rpmtsMembers(ts);
+    rpmstrPool tspool = NULL;
+
+    if (tsmem) {
+	if (tsmem->pool == NULL)
+	    tsmem->pool = rpmstrPoolCreate();
+	tspool = tsmem->pool;
+    }
+    return tspool;
+}
+
 rpmts rpmtsCreate(void)
 {
     rpmts ts;
@@ -981,9 +991,10 @@ rpmts rpmtsCreate(void)
     }
 
     tsmem = xcalloc(1, sizeof(*ts->members));
+    tsmem->pool = NULL;
     tsmem->delta = 5;
     tsmem->addedPackages = NULL;
-    tsmem->removedPackages = intHashCreate(128, uintId, uintCmp, NULL);
+    tsmem->removedPackages = removedHashCreate(128, uintId, uintCmp, NULL, NULL);
     tsmem->orderAlloced = 0;
     tsmem->orderCount = 0;
     tsmem->order = NULL;

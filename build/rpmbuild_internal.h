@@ -3,6 +3,7 @@
 
 #include <rpm/rpmbuild.h>
 #include <rpm/rpmutil.h>
+#include <rpm/rpmstrpool.h>
 #include "build/rpmbuild_misc.h"
 
 struct TriggerFileEntry {
@@ -16,6 +17,7 @@ struct TriggerFileEntry {
 
 typedef struct ReadLevelEntry {
     int reading;
+    int lineNum;
     struct ReadLevelEntry * next;
 } RLE_t;
 
@@ -41,8 +43,9 @@ struct rpmSpec_s {
     const char * rootDir;
 
     struct OpenFileInfo * fileStack;
-    char lbuf[10*BUFSIZ];
-    char *lbufPtr;
+    char *lbuf;
+    size_t lbufSize;
+    size_t lbufOff;
     char nextpeekc;
     char * nextline;
     char * line;
@@ -64,10 +67,10 @@ struct rpmSpec_s {
 
     char * sourceRpmName;
     unsigned char * sourcePkgId;
-    Header sourceHeader;
-    rpmfi sourceCpioList;
+    Package sourcePackage;
 
     rpmMacroContext macros;
+    rpmstrPool pool;
 
     StringBuf prep;		/*!< %prep scriptlet. */
     StringBuf build;		/*!< %build scriptlet. */
@@ -84,9 +87,18 @@ struct rpmSpec_s {
  * The structure used to store values for a package.
  */
 struct Package_s {
+    rpmsid name;
+    rpmstrPool pool;
     Header header;
     rpmds ds;			/*!< Requires: N = EVR */
+    rpmds requires;
+    rpmds provides;
+    rpmds conflicts;
+    rpmds obsoletes;
+    rpmds triggers;
+    rpmds order;
     rpmfi cpioList;
+    rpm_loff_t  cpioArchiveSize;
 
     struct Source * icon;
 
@@ -100,9 +112,6 @@ struct Package_s {
     char * preTransFile;	/*!< %pretrans scriptlet. */
     char * postTransFile;	/*!< %posttrans scriptlet. */
     char * verifyFile;	/*!< %verifyscript scriptlet. */
-
-    StringBuf specialDoc;
-    char *specialDocDir;
 
     struct TriggerFileEntry * triggerFiles;
 
@@ -318,11 +327,13 @@ rpmRC lookupPackage(rpmSpec spec, const char * name, int flag,
 
 /** \ingroup rpmbuild
  * Create and initialize package control structure.
- * @param spec		spec file control structure
+ * @param name		package name for sub-packages (or NULL)
+ * @param pool		string pool
+ * @param pkglist	package list pointer to append to (or NULL)
  * @return		package control structure
  */
 RPM_GNUC_INTERNAL
-Package newPackage(rpmSpec spec);
+Package newPackage(const char *name, rpmstrPool pool, Package * pkglist);
 
 /** \ingroup rpmbuild
  * Post-build processing for binary package(s).
@@ -393,6 +404,31 @@ rpmRC packageBinaries(rpmSpec spec, const char *cookie, int cheating);
  */
 RPM_GNUC_INTERNAL
 rpmRC packageSources(rpmSpec spec, char **cookie);
+
+/** \ingroup rpmbuild
+ * Add dependency to package, filtering duplicates.
+ * @param pkg		package
+ * @param tagN		tag, identifies type of dependency
+ * @param N		(e.g. Requires: foo < 0:1.2-3, "foo")
+ * @param EVR		(e.g. Requires: foo < 0:1.2-3, "0:1.2-3")
+ * @param Flags		(e.g. Requires: foo < 0:1.2-3, both "Requires:" and "<")
+ * @param index		(0 always)
+ * @return		0 on success, 1 on error
+ */
+RPM_GNUC_INTERNAL
+int addReqProv(Package pkg, rpmTagVal tagN,
+		const char * N, const char * EVR, rpmsenseFlags Flags,
+		uint32_t index);
+
+/** \ingroup rpmbuild
+ * Add rpmlib feature dependency.
+ * @param pkg		package
+ * @param feature	rpm feature name (i.e. "rpmlib(Foo)" for feature Foo)
+ * @param featureEVR	rpm feature epoch/version/release
+ * @return		0 always
+ */
+RPM_GNUC_INTERNAL
+int rpmlibNeedsFeature(Package pkg, const char * feature, const char * featureEVR);
 
 #ifdef __cplusplus
 }

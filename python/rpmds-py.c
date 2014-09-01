@@ -6,6 +6,7 @@
 
 #include "header-py.h"
 #include "rpmds-py.h"
+#include "rpmstrpool-py.h"
 
 struct rpmdsObject_s {
     PyObject_HEAD
@@ -169,12 +170,18 @@ static PyObject *rpmds_Instance(rpmdsObject * s)
     return Py_BuildValue("i", rpmdsInstance(s->ds));
 }
 
-static PyObject * rpmds_Rpmlib(rpmdsObject * s)
+static PyObject * rpmds_Rpmlib(rpmdsObject * s, PyObject *args, PyObject *kwds)
 {
+    rpmstrPool pool = NULL;
     rpmds ds = NULL;
+    char * kwlist[] = {"pool", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O&:rpmds_Rpmlib", kwlist, 
+		 &poolFromPyObject, &pool))
+	return NULL;
 
     /* XXX check return code, permit arg (NULL uses system default). */
-    rpmdsRpmlib(&ds, NULL);
+    rpmdsRpmlibPool(pool, &ds, NULL);
 
     return rpmds_Wrap(&rpmds_Type, ds);
 }
@@ -210,7 +217,7 @@ static struct PyMethodDef rpmds_methods[] = {
 "ds.Search(element) -> matching ds index (-1 on failure)\n\
 - Check that element dependency range overlaps some member of ds.\n\
 The current index in ds is positioned at overlapping member upon success.\n" },
- {"Rpmlib",     (PyCFunction)rpmds_Rpmlib,      METH_NOARGS|METH_STATIC,
+ {"Rpmlib",     (PyCFunction)rpmds_Rpmlib,      METH_VARARGS|METH_KEYWORDS|METH_STATIC,
 	"ds.Rpmlib -> nds       - Return internal rpmlib dependency set.\n"},
  {"Compare",	(PyCFunction)rpmds_Compare,	METH_O,
 	NULL},
@@ -305,10 +312,12 @@ static PyObject * rpmds_new(PyTypeObject * subtype, PyObject *args, PyObject *kw
     rpmTagVal tagN = RPMTAG_REQUIRENAME;
     rpmds ds = NULL;
     Header h = NULL;
-    char * kwlist[] = {"obj", "tag", NULL};
+    rpmstrPool pool = NULL;
+    char * kwlist[] = {"obj", "tag", "pool", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO&:rpmds_new", kwlist, 
-	    	 &obj, tagNumFromPyObject, &tagN))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO&|O&:rpmds_new", kwlist, 
+	    	 &obj, tagNumFromPyObject, &tagN,
+		 &poolFromPyObject, &pool))
 	return NULL;
 
     if (PyTuple_Check(obj)) {
@@ -317,16 +326,16 @@ static PyObject * rpmds_new(PyTypeObject * subtype, PyObject *args, PyObject *kw
 	rpmsenseFlags flags = RPMSENSE_ANY;
 	/* TODO: if flags are specified, evr should be required too */
 	if (PyArg_ParseTuple(obj, "s|O&s", &name, depflags, &flags, &evr)) {
-	    ds = rpmdsSingle(tagN, name, evr, flags);
+	    ds = rpmdsSinglePool(pool, tagN, name, evr, flags);
 	} else {
 	    PyErr_SetString(PyExc_ValueError, "invalid dependency tuple");
 	    return NULL;
 	}
     } else if (hdrFromPyObject(obj, &h)) {
 	if (tagN == RPMTAG_NEVR) {
-	    ds = rpmdsThis(h, RPMTAG_PROVIDENAME, RPMSENSE_EQUAL);
+	    ds = rpmdsThisPool(pool, h, RPMTAG_PROVIDENAME, RPMSENSE_EQUAL);
 	} else {
-	    ds = rpmdsNew(h, tagN, 0);
+	    ds = rpmdsNewPool(pool, h, tagN, 0);
 	}
     } else {
 	PyErr_SetString(PyExc_TypeError, "header or tuple expected");

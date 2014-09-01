@@ -7,7 +7,6 @@ librpm.so.3 librpm3 #MINVER#
  _rpmds_nopromote@Base 4.10.0
  _rpmfc_debug@Base 4.10.0
  _rpmts_stats@Base 4.10.0
- cpioStrerror@Base 4.10.0
  headerAddEntry@Base 4.10.0
  headerAddI18NString@Base 4.10.0
  headerAddOrAppendEntry@Base 4.10.0
@@ -79,6 +78,7 @@ librpm.so.3 librpm3 #MINVER#
  rpmFreeRpmrc@Base 4.10.0
  rpmFreeSignature@Base 4.10.0
  rpmGenDigest@Base 4.10.0
+ rpmGetArchColor@Base 4.11.0.1
  rpmGetArchInfo@Base 4.10.0
  rpmGetOsInfo@Base 4.10.0
  rpmIArgs@Base 4.10.0
@@ -95,6 +95,9 @@ librpm.so.3 librpm3 #MINVER#
  rpmMachineScore@Base 4.10.0
  rpmNAME@Base 4.10.0
  rpmNewSignature@Base 4.10.0
+ rpmPackageFilesArchive@Base 4.11.0.1
+ rpmPackageFilesInstall@Base 4.11.0.1
+ rpmPackageFilesRemove@Base 4.11.0.1
  rpmPermsString@Base 4.10.0
  rpmProblemCompare@Base 4.10.0
  rpmProblemCreate@Base 4.10.0
@@ -145,6 +148,13 @@ librpm.so.3 librpm3 #MINVER#
  rpmcliRootDir@Base 4.10.0
  rpmcliVerify@Base 4.10.0
  rpmcliVerifySignatures@Base 4.10.0
+ rpmcpioClose@Base 4.11.0.1
+ rpmcpioFree@Base 4.11.0.1
+ rpmcpioOpen@Base 4.11.0.1
+ rpmcpioRead@Base 4.11.0.1
+ rpmcpioStrerror@Base 4.11.0.1
+ rpmcpioTell@Base 4.11.0.1
+ rpmcpioWrite@Base 4.11.0.1
  rpmdbAppendIterator@Base 4.10.0
  rpmdbCheckSignals@Base 4.10.0
  rpmdbCheckTerminate@Base 4.10.0
@@ -191,17 +201,21 @@ librpm.so.3 librpm3 #MINVER#
  rpmdsNVRMatchesDep@Base 4.10.0
  rpmdsNew@Base 4.10.0
  rpmdsNewDNEVR@Base 4.10.0
+ rpmdsNewPool@Base 4.11.1
  rpmdsNext@Base 4.10.0
  rpmdsNoPromote@Base 4.10.0
  rpmdsNotify@Base 4.10.0
  rpmdsRpmlib@Base 4.10.0
+ rpmdsRpmlibPool@Base 4.11.1
  rpmdsSearch@Base 4.10.0
  rpmdsSetColor@Base 4.10.0
  rpmdsSetIx@Base 4.10.0
  rpmdsSetNoPromote@Base 4.10.0
  rpmdsSingle@Base 4.10.0
+ rpmdsSinglePool@Base 4.11.1
  rpmdsTagN@Base 4.10.0
  rpmdsThis@Base 4.10.0
+ rpmdsThisPool@Base 4.11.1
  rpmfiBN@Base 4.10.0
  rpmfiColor@Base 4.10.0
  rpmfiCompare@Base 4.10.0
@@ -238,14 +252,13 @@ librpm.so.3 librpm3 #MINVER#
  rpmfiLink@Base 4.10.0
  rpmfiMD5@Base 4.10.0
  rpmfiNew@Base 4.10.0
+ rpmfiNewPool@Base 4.11.1
  rpmfiNext@Base 4.10.0
  rpmfiNextD@Base 4.10.0
  rpmfiSetDX@Base 4.10.0
  rpmfiSetFX@Base 4.10.0
  rpmfiVFlags@Base 4.10.0
  rpmfiWhatis@Base 4.10.0
- rpmfsSetAction@Base 4.10.0
- rpmfsmRun@Base 4.10.0
  rpmpluginsAdd@Base 4.10.0
  rpmpluginsAddCollectionPlugin@Base 4.10.0
  rpmpluginsCallCleanup@Base 4.10.0
@@ -301,6 +314,7 @@ librpm.so.3 librpm3 #MINVER#
  rpmtdSetIndex@Base 4.10.0
  rpmtdSetTag@Base 4.10.0
  rpmtdTag@Base 4.10.0
+ rpmtdToPool@Base 4.11.0.1
  rpmtdType@Base 4.10.0
  rpmteA@Base 4.10.0
  rpmteCleanDS@Base 4.10.0
@@ -390,7 +404,7 @@ librpm.so.3 librpm3 #MINVER#
  rpmugFree@Base 4.10.0
  rpmugGid@Base 4.10.0
  rpmugGname@Base 4.10.0
- rpmugStashStr@Base 4.10.0
+ rpmugInit@Base 4.11.2
  rpmugUid@Base 4.10.0
  rpmugUname@Base 4.10.0
  rpmvercmp@Base 4.10.0

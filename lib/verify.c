@@ -71,7 +71,6 @@ int rpmVerifyFile(const rpmts ts, const rpmfi fi,
     switch (rpmfiFState(fi)) {
     case RPMFILE_STATE_NETSHARED:
     case RPMFILE_STATE_NOTINSTALLED:
-    case RPMFILE_STATE_MISSING:
 	return 0;
 	break;
     case RPMFILE_STATE_REPLACED:
@@ -87,6 +86,8 @@ int rpmVerifyFile(const rpmts ts, const rpmfi fi,
 		   RPMVERIFY_MTIME | RPMVERIFY_RDEV);
 	break;
     case RPMFILE_STATE_NORMAL:
+    /* File from a non-installed package, try to verify nevertheless */
+    case RPMFILE_STATE_MISSING:
 	break;
     }
 
@@ -325,6 +326,25 @@ char * rpmFFlagsString(uint32_t fflags, const char *pad)
     return fmt;
 }
 
+static const char * stateStr(rpmfileState fstate)
+{
+    switch (fstate) {
+    case RPMFILE_STATE_NORMAL:
+	return NULL;
+    case RPMFILE_STATE_NOTINSTALLED:
+	return rpmIsVerbose() ? _("not installed") : NULL;
+    case RPMFILE_STATE_NETSHARED:
+	return rpmIsVerbose() ? _("net shared") : NULL;
+    case RPMFILE_STATE_WRONGCOLOR:
+	return rpmIsVerbose() ? _("wrong color") : NULL;
+    case RPMFILE_STATE_REPLACED:
+	return _("replaced");
+    case RPMFILE_STATE_MISSING:
+	return _("no state");
+    }
+    return _("unknown state");
+}
+
 /**
  * Check file info from header against what's actually installed.
  * @param ts		transaction set
@@ -346,6 +366,7 @@ static int verifyHeader(rpmts ts, Header h, rpmVerifyAttrs omitMask, int ghosts)
     while (rpmfiNext(fi) >= 0) {
 	rpmfileAttrs fileAttrs = rpmfiFFlags(fi);
 	char *buf = NULL, *attrFormat;
+	const char *fstate = NULL;
 	char ac;
 	int rc;
 
@@ -364,6 +385,10 @@ static int verifyHeader(rpmts ts, Header h, rpmVerifyAttrs omitMask, int ghosts)
 	    rpmdbFreeIterator(mi);
 	}
 
+	/* State is only meaningful for installed packages */
+	if (headerGetInstance(h))
+	    fstate = stateStr(rpmfiFState(fi));
+
 	attrFormat = rpmFFlagsString(fileAttrs, "");
 	ac = rstreq(attrFormat, "") ? ' ' : attrFormat[0];
 	if (rc) {
@@ -378,7 +403,7 @@ static int verifyHeader(rpmts ts, Header h, rpmVerifyAttrs omitMask, int ghosts)
 		}
 		ec = rc;
 	    }
-	} else if (verifyResult || rpmIsVerbose()) {
+	} else if (verifyResult || fstate || rpmIsVerbose()) {
 	    char *verifyFormat = rpmVerifyString(verifyResult, ".");
 	    rasprintf(&buf, "%s  %c %s", verifyFormat, ac, rpmfiFN(fi));
 	    free(verifyFormat);
@@ -388,6 +413,8 @@ static int verifyHeader(rpmts ts, Header h, rpmVerifyAttrs omitMask, int ghosts)
 	free(attrFormat);
 
 	if (buf) {
+	    if (fstate)
+		buf = rstrscat(&buf, " (", fstate, ")", NULL);
 	    rpmlog(RPMLOG_NOTICE, "%s\n", buf);
 	    buf = _free(buf);
 	}

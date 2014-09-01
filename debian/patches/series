@@ -1,3 +1,4 @@
+lua-compat.patch
 do-not-link-libpython.patch
 kfreebsd.patch
 hurd.patch
@@ -9,5 +10,6 @@ tempfile.patch
 no-linux-gate.so-dependancy.patch
 autogen-cleanup.patch
 lua-libname.patch
-rpm-4.9.1.2-rpmlib-filesystem-check.patch
-0001-Ensure-correct-return-code-on-malformed-signature-in.patch
+rpm-4.10.90-rpmlib-filesystem-check.patch
+fix-python-multiarch-include.patch
+rpm-4.11.2-double-separator-warning.patch

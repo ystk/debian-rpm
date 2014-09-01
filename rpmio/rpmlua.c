@@ -7,6 +7,26 @@
 #include <lposix.h>
 #include <lrexlib.h>
 
+/* replaced in 5.1 */
+#ifndef lua_open
+#define lua_open()	luaL_newstate()
+#endif
+
+/* defined as lua_objlen in 5.1 */
+#ifndef lua_strlen
+#define lua_strlen(L,i)	lua_rawlen(L, (i))
+#endif
+
+/* deprecated in 5.1, defined as lua_objlen in 5.1 */
+#ifndef luaL_getn
+#define luaL_getn(L,i)	((int)lua_rawlen(L, i))
+#endif
+
+/* define added in 5.2 */
+#ifndef lua_pushglobaltable
+#define lua_pushglobaltable(L)	lua_pushvalue(L, LUA_GLOBALSINDEX)
+#endif
+
 #include <unistd.h>
 #include <assert.h>
 
@@ -53,10 +73,10 @@ rpmlua rpmluaNew()
 {
     rpmlua lua = (rpmlua) xcalloc(1, sizeof(*lua));
     struct stat st;
-    const luaL_reg *lib;
+    const luaL_Reg *lib;
     char *initlua = rpmGenPath(rpmConfigDir(), "init.lua", NULL);
    
-    static const luaL_reg extlibs[] = {
+    static const luaL_Reg extlibs[] = {
 	{"posix", luaopen_posix},
 	{"rex", luaopen_rex},
 	{"rpm", luaopen_rpm},
@@ -74,12 +94,26 @@ rpmlua rpmluaNew()
 	lua_call(L, 1, 0);
 	lua_settop(L, 0);
     }
+#ifndef LUA_GLOBALSINDEX
+    lua_pushglobaltable(L);
+#endif
     lua_pushliteral(L, "LUA_PATH");
     lua_pushfstring(L, "%s/%s", rpmConfigDir(), "/lua/?.lua");
+#ifdef LUA_GLOBALSINDEX
     lua_rawset(L, LUA_GLOBALSINDEX);
+#else
+    lua_settable(L, -3);
+#endif
     lua_pushliteral(L, "print");
     lua_pushcfunction(L, rpm_print);
+#ifdef LUA_GLOBALSINDEX
     lua_rawset(L, LUA_GLOBALSINDEX);
+#else
+    lua_settable(L, -3);
+#endif
+#ifndef LUA_GLOBALSINDEX
+    lua_pop(L, 1);
+#endif
     rpmluaSetData(lua, "lua", lua);
     if (stat(initlua, &st) != -1)
 	(void)rpmluaRunScriptFile(lua, initlua);
@@ -191,7 +225,7 @@ void rpmluaSetVar(rpmlua _lua, rpmluav var)
     }
     if (!var->listmode || lua->pushsize > 0) {
 	if (lua->pushsize == 0)
-	    lua_pushvalue(L, LUA_GLOBALSINDEX);
+	    lua_pushglobaltable(L);
 	if (pushvar(L, var->keyType, &var->key) != -1) {
 	    if (pushvar(L, var->valueType, &var->value) != -1)
 		lua_rawset(L, -3);
@@ -228,7 +262,7 @@ void rpmluaGetVar(rpmlua _lua, rpmluav var)
     lua_State *L = lua->L;
     if (!var->listmode) {
 	if (lua->pushsize == 0)
-	    lua_pushvalue(L, LUA_GLOBALSINDEX);
+	    lua_pushglobaltable(L);
 	if (pushvar(L, var->keyType, &var->key) != -1) {
 	    lua_rawget(L, -2);
 	    popvar(L, &var->valueType, &var->value);
@@ -261,7 +295,7 @@ static int findkey(lua_State *L, int oper, const char *key, va_list va)
     vsnprintf(buf, blen + 1, key, va);
 
     s = e = buf;
-    lua_pushvalue(L, LUA_GLOBALSINDEX);
+    lua_pushglobaltable(L);
     for (;;) {
 	if (*e == '\0' || *e == '.') {
 	    if (e != s) {
@@ -492,6 +526,8 @@ int rpmluaRunScript(rpmlua _lua, const char *script, const char *name)
     int ret = 0;
     if (name == NULL)
 	name = "<lua>";
+    if (script == NULL)
+	script = "";
     if (luaL_loadbuffer(L, script, strlen(script), name) != 0) {
 	rpmlog(RPMLOG_ERR, _("invalid syntax in lua script: %s\n"),
 		 lua_tostring(L, -1));
@@ -822,7 +858,7 @@ static int rpm_print (lua_State *L)
     return 0;
 }
 
-static const luaL_reg rpmlib[] = {
+static const luaL_Reg rpmlib[] = {
     {"b64encode", rpm_b64encode},
     {"b64decode", rpm_b64decode},
     {"expand", rpm_expand},
@@ -836,7 +872,7 @@ static const luaL_reg rpmlib[] = {
 
 static int luaopen_rpm(lua_State *L)
 {
-    lua_pushvalue(L, LUA_GLOBALSINDEX);
+    lua_pushglobaltable(L);
     luaL_openlib(L, "rpm", rpmlib, 0);
     return 0;
 }
