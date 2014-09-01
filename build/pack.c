@@ -8,17 +8,15 @@
 #include <errno.h>
 #include <netdb.h>
 #include <time.h>
+#include <sys/wait.h>
 
 #include <rpm/rpmlib.h>			/* RPMSIGTAG*, rpmReadPackageFile */
-#include <rpm/rpmts.h>
 #include <rpm/rpmfileutil.h>
 #include <rpm/rpmlog.h>
 
 #include "rpmio/rpmio_internal.h"	/* fdInitDigest, fdFiniDigest */
-#include "lib/cpio.h"
 #include "lib/fsm.h"
-#include "lib/rpmfi_internal.h"		/* rpmfiFSM() */
-#include "lib/rpmte_internal.h"		/* rpmfs */
+#include "lib/cpio.h"
 #include "lib/signature.h"
 #include "lib/rpmlead.h"
 #include "build/rpmbuild_internal.h"
@@ -26,56 +24,34 @@
 
 #include "debug.h"
 
-typedef struct cpioSourceArchive_s {
-    rpm_loff_t	cpioArchiveSize;
-    rpmfi	cpioList;
-} * CSA_t;
-
 /**
  * @todo Create transaction set *much* earlier.
  */
-static rpmRC cpio_doio(FD_t fdo, Header h, CSA_t csa, const char * fmodeMacro)
+static rpmRC cpio_doio(FD_t fdo, Package pkg, const char * fmodeMacro)
 {
-    rpmts ts = NULL;
-    rpmfi fi = csa->cpioList;
-    rpmte te = NULL;
-    rpmfs fs = NULL;
     char *failedFile = NULL;
     FD_t cfd;
-    int i, fsmrc;
+    int fsmrc;
 
     (void) Fflush(fdo);
     cfd = Fdopen(fdDup(Fileno(fdo)), fmodeMacro);
     if (cfd == NULL)
 	return RPMRC_FAIL;
 
-    /* make up a transaction element for passing to fsm */
-    ts = rpmtsCreate();
-    rpmtsAddInstallElement(ts, h, NULL, 0, NULL);
-    te = rpmtsElement(ts, 0);
-    fs = rpmteGetFileStates(te);
-
-    fi = rpmfiInit(fi, 0);
-    while ((i = rpmfiNext(fi)) >= 0) {
-	if (rpmfiFFlags(fi) & RPMFILE_GHOST)
-	    rpmfsSetAction(fs, i, FA_SKIP);
-	else
-	    rpmfsSetAction(fs, i, FA_COPYOUT);
-    }
-
-    fsmrc = rpmfsmRun(FSM_PKGBUILD, ts, te, fi, cfd, NULL,
-		      &csa->cpioArchiveSize, &failedFile);
+    fsmrc = rpmPackageFilesArchive(pkg->cpioList, headerIsSource(pkg->header),
+				   cfd, &pkg->cpioArchiveSize, &failedFile);
 
     if (fsmrc) {
 	if (failedFile)
-	    rpmlog(RPMLOG_ERR, _("create archive failed on file %s\n"), failedFile);
+	    rpmlog(RPMLOG_ERR, _("create archive failed on file %s: %s\n"),
+		   failedFile, rpmcpioStrerror(fsmrc));
 	else
-	    rpmlog(RPMLOG_ERR, _("create archive failed\n"));
+	    rpmlog(RPMLOG_ERR, _("create archive failed: %s\n"),
+		   rpmcpioStrerror(fsmrc));
     }
 
     free(failedFile);
     Fclose(cfd);
-    rpmtsFree(ts);
 
     return (fsmrc == 0) ? RPMRC_OK : RPMRC_FAIL;
 }
@@ -267,8 +243,8 @@ static int haveTildeDep(Header h)
     return 0;
 }
 
-static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileName,
-	     CSA_t csa, char **cookie)
+static rpmRC writeRPM(Package pkg, unsigned char ** pkgidp,
+		      const char *fileName, char **cookie)
 {
     FD_t fd = NULL;
     FD_t ifd = NULL;
@@ -276,23 +252,17 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
     char * rpmio_flags = NULL;
     char * SHA1 = NULL;
     const char *s;
-    Header h;
     Header sig = NULL;
     int xx;
     rpmRC rc = RPMRC_OK;
     struct rpmtd_s td;
-    rpmTagVal sizetag;
     rpmTagVal payloadtag;
-
-    /* Transfer header reference form *hdrp to h. */
-    h = headerLink(*hdrp);
-    *hdrp = headerFree(*hdrp);
 
     if (pkgidp)
 	*pkgidp = NULL;
 
     /* Save payload information */
-    if (headerIsSource(h))
+    if (headerIsSource(pkg->header))
 	rpmio_flags = rpmExpand("%{?_source_payload}", NULL);
     else 
 	rpmio_flags = rpmExpand("%{?_binary_payload}", NULL);
@@ -306,7 +276,7 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
     if (s) {
 	char *buf = NULL;
 	const char *compr = NULL;
-	headerPutString(h, RPMTAG_PAYLOADFORMAT, "cpio");
+	headerPutString(pkg->header, RPMTAG_PAYLOADFORMAT, "cpio");
 
 	if (rstreq(s+1, "ufdio")) {
 	    compr = NULL;
@@ -316,15 +286,15 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
 	} else if (rstreq(s+1, "bzdio")) {
 	    compr = "bzip2";
 	    /* Add prereq on rpm version that understands bzip2 payloads */
-	    (void) rpmlibNeedsFeature(h, "PayloadIsBzip2", "3.0.5-1");
+	    (void) rpmlibNeedsFeature(pkg, "PayloadIsBzip2", "3.0.5-1");
 #endif
 #if HAVE_LZMA_H
 	} else if (rstreq(s+1, "xzdio")) {
 	    compr = "xz";
-	    (void) rpmlibNeedsFeature(h, "PayloadIsXz", "5.2-1");
+	    (void) rpmlibNeedsFeature(pkg, "PayloadIsXz", "5.2-1");
 	} else if (rstreq(s+1, "lzdio")) {
 	    compr = "lzma";
-	    (void) rpmlibNeedsFeature(h, "PayloadIsLzma", "4.4.6-1");
+	    (void) rpmlibNeedsFeature(pkg, "PayloadIsLzma", "4.4.6-1");
 #endif
 	} else {
 	    rpmlog(RPMLOG_ERR, _("Unknown payload compression: %s\n"),
@@ -334,32 +304,30 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
 	}
 
 	if (compr)
-	    headerPutString(h, RPMTAG_PAYLOADCOMPRESSOR, compr);
+	    headerPutString(pkg->header, RPMTAG_PAYLOADCOMPRESSOR, compr);
 	buf = xstrdup(rpmio_flags);
 	buf[s - rpmio_flags] = '\0';
-	headerPutString(h, RPMTAG_PAYLOADFLAGS, buf+1);
+	headerPutString(pkg->header, RPMTAG_PAYLOADFLAGS, buf+1);
 	free(buf);
     }
 
     /* check if the package has a dependency with a '~' */
-    if (haveTildeDep(h))
-	(void) rpmlibNeedsFeature(h, "TildeInVersions", "4.10.0-1");
+    if (haveTildeDep(pkg->header))
+	(void) rpmlibNeedsFeature(pkg, "TildeInVersions", "4.10.0-1");
 
     /* Create and add the cookie */
     if (cookie) {
 	rasprintf(cookie, "%s %d", buildHost(), (int) (*getBuildTime()));
-	headerPutString(h, RPMTAG_COOKIE, *cookie);
+	headerPutString(pkg->header, RPMTAG_COOKIE, *cookie);
     }
     
     /* Reallocate the header into one contiguous region. */
-    h = headerReload(h, RPMTAG_HEADERIMMUTABLE);
-    if (h == NULL) {	/* XXX can't happen */
+    pkg->header = headerReload(pkg->header, RPMTAG_HEADERIMMUTABLE);
+    if (pkg->header == NULL) {
 	rc = RPMRC_FAIL;
 	rpmlog(RPMLOG_ERR, _("Unable to create immutable header region.\n"));
 	goto exit;
     }
-    /* Re-reference reallocated header. */
-    *hdrp = headerLink(h);
 
     /*
      * Write the header+archive into a temp file so that the size of
@@ -373,14 +341,14 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
     }
 
     fdInitDigest(fd, PGPHASHALGO_SHA1, 0);
-    if (headerWrite(fd, h, HEADER_MAGIC_YES)) {
+    if (headerWrite(fd, pkg->header, HEADER_MAGIC_YES)) {
 	rc = RPMRC_FAIL;
 	rpmlog(RPMLOG_ERR, _("Unable to write temp header\n"));
     } else { /* Write the archive and get the size */
 	(void) Fflush(fd);
 	fdFiniDigest(fd, PGPHASHALGO_SHA1, (void **)&SHA1, NULL, 1);
-	if (csa->cpioList != NULL) {
-	    rc = cpio_doio(fd, h, csa, rpmio_flags);
+	if (pkg->cpioList != NULL) {
+	    rc = cpio_doio(fd, pkg, rpmio_flags);
 	} else {
 	    rc = RPMRC_FAIL;
 	    rpmlog(RPMLOG_ERR, _("Bad CSA data\n"));
@@ -406,14 +374,12 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
      * older rpm will just bail out with error message on attempt to read
      * such a package.
      */
-    if (csa->cpioArchiveSize < UINT32_MAX) {
-	sizetag = RPMSIGTAG_SIZE;
+    if (pkg->cpioArchiveSize < UINT32_MAX) {
 	payloadtag = RPMSIGTAG_PAYLOADSIZE;
     } else {
-	sizetag = RPMSIGTAG_LONGSIZE;
 	payloadtag = RPMSIGTAG_LONGARCHIVESIZE;
     }
-    (void) rpmGenDigest(sig, sigtarget, sizetag);
+    (void) rpmGenDigest(sig, sigtarget, RPMSIGTAG_SIZE);
     (void) rpmGenDigest(sig, sigtarget, RPMSIGTAG_MD5);
 
     if (SHA1) {
@@ -433,12 +399,12 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
 	td.tag = payloadtag;
 	td.count = 1;
 	if (payloadtag == RPMSIGTAG_PAYLOADSIZE) {
-	    rpm_off_t asize = csa->cpioArchiveSize;
+	    rpm_off_t asize = pkg->cpioArchiveSize;
 	    td.type = RPM_INT32_TYPE;
 	    td.data = &asize;
 	    headerPut(sig, &td, HEADERPUT_DEFAULT);
 	} else {
-	    rpm_loff_t asize = csa->cpioArchiveSize;
+	    rpm_loff_t asize = pkg->cpioArchiveSize;
 	    td.type = RPM_INT64_TYPE;
 	    td.data = &asize;
 	    headerPut(sig, &td, HEADERPUT_DEFAULT);
@@ -464,7 +430,7 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
 
     /* Write the lead section into the package. */
     {	
-	rpmlead lead = rpmLeadFromHeader(h);
+	rpmlead lead = rpmLeadFromHeader(pkg->header);
 	rc = rpmLeadWrite(fd, lead);
 	rpmLeadFree(lead);
 	if (rc != RPMRC_OK) {
@@ -518,7 +484,6 @@ static rpmRC writeRPM(Header *hdrp, unsigned char ** pkgidp, const char *fileNam
 exit:
     free(rpmio_flags);
     free(SHA1);
-    headerFree(h);
 
     /* XXX Fish the pkgid out of the signature header. */
     if (sig != NULL && pkgidp != NULL) {
@@ -575,8 +540,6 @@ static rpmRC checkPackages(char *pkgcheck)
 
 rpmRC packageBinaries(rpmSpec spec, const char *cookie, int cheating)
 {
-    struct cpioSourceArchive_s csabuf;
-    CSA_t csa = &csabuf;
     rpmRC rc;
     const char *errorString;
     Package pkg;
@@ -607,7 +570,7 @@ rpmRC packageBinaries(rpmSpec spec, const char *cookie, int cheating)
 	}
 
 	if (cheating) {
-	    (void) rpmlibNeedsFeature(pkg->header, "ShortCircuited", "4.9.0-1");
+	    (void) rpmlibNeedsFeature(pkg, "ShortCircuited", "4.9.0-1");
 	}
 	
 	{   char *binFormat = rpmGetPath("%{_rpmfilename}", NULL);
@@ -642,12 +605,7 @@ rpmRC packageBinaries(rpmSpec spec, const char *cookie, int cheating)
 	    free(binRpm);
 	}
 
-	memset(csa, 0, sizeof(*csa));
-	csa->cpioArchiveSize = 0;
-	csa->cpioList = rpmfiLink(pkg->cpioList);
-
-	rc = writeRPM(&pkg->header, NULL, fn, csa, NULL);
-	csa->cpioList = rpmfiFree(csa->cpioList);
+	rc = writeRPM(pkg, NULL, fn, NULL);
 	if (rc == RPMRC_OK) {
 	    /* Do check each written package if enabled */
 	    char *pkgcheck = rpmExpand("%{?_build_pkgcheck} ", fn, NULL);
@@ -680,32 +638,26 @@ rpmRC packageBinaries(rpmSpec spec, const char *cookie, int cheating)
 
 rpmRC packageSources(rpmSpec spec, char **cookie)
 {
-    struct cpioSourceArchive_s csabuf;
-    CSA_t csa = &csabuf;
+    Package sourcePkg = spec->sourcePackage;
     rpmRC rc;
 
     /* Add some cruft */
-    headerPutString(spec->sourceHeader, RPMTAG_RPMVERSION, VERSION);
-    headerPutString(spec->sourceHeader, RPMTAG_BUILDHOST, buildHost());
-    headerPutUint32(spec->sourceHeader, RPMTAG_BUILDTIME, getBuildTime(), 1);
+    headerPutString(sourcePkg->header, RPMTAG_RPMVERSION, VERSION);
+    headerPutString(sourcePkg->header, RPMTAG_BUILDHOST, buildHost());
+    headerPutUint32(sourcePkg->header, RPMTAG_BUILDTIME, getBuildTime(), 1);
 
     /* XXX this should be %_srpmdir */
     {	char *fn = rpmGetPath("%{_srcrpmdir}/", spec->sourceRpmName,NULL);
 	char *pkgcheck = rpmExpand("%{?_build_pkgcheck_srpm} ", fn, NULL);
 
-	memset(csa, 0, sizeof(*csa));
-	csa->cpioArchiveSize = 0;
-	csa->cpioList = rpmfiLink(spec->sourceCpioList); 
-
 	spec->sourcePkgId = NULL;
-	rc = writeRPM(&spec->sourceHeader, &spec->sourcePkgId, fn, csa, cookie);
+	rc = writeRPM(sourcePkg, &spec->sourcePkgId, fn, cookie);
 
 	/* Do check SRPM package if enabled */
 	if (rc == RPMRC_OK && pkgcheck[0] != ' ') {
 	    rc = checkPackages(pkgcheck);
 	}
 
-	rpmfiFree(csa->cpioList);
 	free(pkgcheck);
 	free(fn);
     }

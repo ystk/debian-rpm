@@ -63,6 +63,14 @@ RPM_GNUC_INTERNAL
 void HASHPREFIX(Empty)(HASHTYPE ht);
 
 /**
+ * Calculate hash for key.
+ * @param @ht		pointer to hash table
+ * @param @key		key
+ */
+RPM_GNUC_INTERNAL
+unsigned int HASHPREFIX(KeyHash)(HASHTYPE ht, HTKEYTYPE key);
+
+/**
  * Add item to hash table.
  * @param ht            pointer to hash table
  * @param key           key
@@ -70,6 +78,14 @@ void HASHPREFIX(Empty)(HASHTYPE ht);
  */
 RPM_GNUC_INTERNAL
 void  HASHPREFIX(AddEntry)(HASHTYPE ht, HTKEYTYPE key
+#ifdef HTDATATYPE
+, HTDATATYPE data
+#endif
+);
+
+/* Add item to hash table with precalculated key hash. */
+RPM_GNUC_INTERNAL
+void  HASHPREFIX(AddHEntry)(HASHTYPE ht, HTKEYTYPE key, unsigned int keyHash
 #ifdef HTDATATYPE
 , HTDATATYPE data
 #endif
@@ -92,6 +108,15 @@ int  HASHPREFIX(GetEntry)(HASHTYPE ht, HTKEYTYPE key,
 #endif
 		HTKEYTYPE* tableKey);
 
+/* Retrieve item from hash table with precalculated key hash. */
+RPM_GNUC_INTERNAL
+int  HASHPREFIX(GetHEntry)(HASHTYPE ht, HTKEYTYPE key, unsigned int keyHash,
+#ifdef HTDATATYPE
+		HTDATATYPE** data,
+		int * dataCount,
+#endif
+		HTKEYTYPE* tableKey);
+
 /**
  * Check for key in hash table.
  * @param ht            pointer to hash table
@@ -100,6 +125,10 @@ int  HASHPREFIX(GetEntry)(HASHTYPE ht, HTKEYTYPE key,
  */
 RPM_GNUC_INTERNAL
 int  HASHPREFIX(HasEntry)(HASHTYPE ht, HTKEYTYPE key);
+
+/* Check for key in hash table with precalculated key hash. */
+RPM_GNUC_INTERNAL
+int  HASHPREFIX(HasHEntry)(HASHTYPE ht, HTKEYTYPE key, unsigned int keyHash);
 
 /**
  * How many buckets are currently allocated (result is implementation 

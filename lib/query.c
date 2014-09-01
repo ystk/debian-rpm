@@ -146,6 +146,10 @@ int showQueryPackage(QVA_t qva, rpmts ts, Header h)
 	if ((qva->qva_flags & QUERY_FOR_CONFIG) && !(fflags & RPMFILE_CONFIG))
 	    continue;
 
+	/* If querying only licenses, skip non-license files. */
+	if ((qva->qva_flags & QUERY_FOR_LICENSE) && !(fflags & RPMFILE_LICENSE))
+	    continue;
+
 	/* If not querying %ghost, skip ghost files. */
 	if ((qva->qva_fflags & RPMFILE_GHOST) && (fflags & RPMFILE_GHOST))
 	    continue;
@@ -382,14 +386,14 @@ static rpmdbMatchIterator initQueryIterator(QVA_t qva, rpmts ts, const char * ar
 	break;
 
     case RPMQV_WHATPROVIDES:
-	if (arg[0] != '/') {
+	if (arg[0] != '/' && arg[0] != '.') {
 	    mi = rpmtsInitIterator(ts, RPMDBI_PROVIDENAME, arg, 0);
 	    if (mi == NULL) {
 		rpmlog(RPMLOG_NOTICE, _("no package provides %s\n"), arg);
 	    }
 	    break;
 	}
-	/* fallthrough on absolute paths */
+	/* fallthrough on absolute and relative paths */
     case RPMQV_PATH:
     {   char * fn;
 

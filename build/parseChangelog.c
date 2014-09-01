@@ -22,6 +22,14 @@ static void addChangelogEntry(Header h, time_t time, const char *name, const cha
     headerPutString(h, RPMTAG_CHANGELOGTEXT, text);
 }
 
+static int sameDate(const struct tm *ot, const struct tm *nt)
+{
+    return (ot->tm_year == nt->tm_year &&
+	    ot->tm_mon == nt->tm_mon &&
+	    ot->tm_mday == nt->tm_mday &&
+	    ot->tm_wday == nt->tm_wday);
+}
+
 /**
  * Parse date string to seconds.
  * @param datestr	date string (e.g. 'Wed Jan 1 1997')
@@ -31,7 +39,7 @@ static void addChangelogEntry(Header h, time_t time, const char *name, const cha
 static int dateToTimet(const char * datestr, time_t * secs)
 {
     int rc = -1; /* assume failure */
-    struct tm time;
+    struct tm time, ntime;
     const char * const * idx;
     char *p, *pe, *q, *date, *tz;
     
@@ -44,6 +52,7 @@ static int dateToTimet(const char * datestr, time_t * secs)
 	{ 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
     
     memset(&time, 0, sizeof(time));
+    memset(&ntime, 0, sizeof(ntime));
 
     date = xstrdup(datestr);
     pe = date;
@@ -55,6 +64,7 @@ static int dateToTimet(const char * datestr, time_t * secs)
     for (idx = days; *idx && !rstreq(*idx, p); idx++)
 	{};
     if (*idx == NULL) goto exit;
+    time.tm_wday = idx - days;
 
     /* month */
     p = pe; SKIPSPACE(p);
@@ -90,13 +100,18 @@ static int dateToTimet(const char * datestr, time_t * secs)
     tz = getenv("TZ");
     if (tz) tz = xstrdup(tz);
     setenv("TZ", "UTC", 1);
-    *secs = mktime(&time);
+    ntime = time; /* struct assignment */
+    *secs = mktime(&ntime);
     unsetenv("TZ");
     if (tz) {
 	setenv("TZ", tz, 1);
 	free(tz);
     }
     if (*secs == -1) goto exit;
+
+    /* XXX Turn this into a hard error in a release or two */
+    if (!sameDate(&time, &ntime))
+	rpmlog(RPMLOG_WARNING, _("bogus date in %%changelog: %s\n"), datestr);
 
     rc = 0;
 
@@ -113,6 +128,7 @@ exit:
  */
 static rpmRC addChangelog(Header h, ARGV_const_t sb)
 {
+    rpmRC rc = RPMRC_FAIL; /* assume failure */
     char *s, *sp;
     int i;
     time_t time;
@@ -127,9 +143,8 @@ static rpmRC addChangelog(Header h, ARGV_const_t sb)
 
     while (*s != '\0') {
 	if (*s != '*') {
-	    rpmlog(RPMLOG_ERR,
-			_("%%changelog entries must start with *\n"));
-	    return RPMRC_FAIL;
+	    rpmlog(RPMLOG_ERR, _("%%changelog entries must start with *\n"));
+	    goto exit;
 	}
 
 	/* find end of line */
@@ -137,7 +152,7 @@ static rpmRC addChangelog(Header h, ARGV_const_t sb)
 	while(*s && *s != '\n') s++;
 	if (! *s) {
 	    rpmlog(RPMLOG_ERR, _("incomplete %%changelog entry\n"));
-	    return RPMRC_FAIL;
+	    goto exit;
 	}
 	*s = '\0';
 	text = s + 1;
@@ -152,12 +167,12 @@ static rpmRC addChangelog(Header h, ARGV_const_t sb)
 	SKIPSPACE(date);
 	if (dateToTimet(date, &time)) {
 	    rpmlog(RPMLOG_ERR, _("bad date in %%changelog: %s\n"), date);
-	    return RPMRC_FAIL;
+	    goto exit;
 	}
 	if (lastTime && lastTime < time) {
 	    rpmlog(RPMLOG_ERR,
 		     _("%%changelog not in descending chronological order\n"));
-	    return RPMRC_FAIL;
+	    goto exit;
 	}
 	lastTime = time;
 
@@ -165,7 +180,7 @@ static rpmRC addChangelog(Header h, ARGV_const_t sb)
 	SKIPSPACE(s);
 	if (! *s) {
 	    rpmlog(RPMLOG_ERR, _("missing name in %%changelog\n"));
-	    return RPMRC_FAIL;
+	    goto exit;
 	}
 
 	/* name */
@@ -176,14 +191,14 @@ static rpmRC addChangelog(Header h, ARGV_const_t sb)
 	}
 	if (s == name) {
 	    rpmlog(RPMLOG_ERR, _("missing name in %%changelog\n"));
-	    return RPMRC_FAIL;
+	    goto exit;
 	}
 
 	/* text */
 	SKIPSPACE(text);
 	if (! *text) {
 	    rpmlog(RPMLOG_ERR, _("no description in %%changelog\n"));
-	    return RPMRC_FAIL;
+	    goto exit;
 	}
 	    
 	/* find the next leading '*' (or eos) */
@@ -205,9 +220,12 @@ static rpmRC addChangelog(Header h, ARGV_const_t sb)
 	
 	s = next;
     }
+    rc = RPMRC_OK;
+
+exit:
     free(sp);
 
-    return RPMRC_OK;
+    return rc;
 }
 
 int parseChangelog(rpmSpec spec)

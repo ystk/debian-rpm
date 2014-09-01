@@ -46,7 +46,7 @@ typedef enum rpmfileState_e {
 #define RPMFILE_IS_INSTALLED(_x) ((_x) == RPMFILE_STATE_NORMAL || (_x) == RPMFILE_STATE_NETSHARED)
 
 /**
- * File Attributes.
+ * Exported File Attributes (ie RPMTAG_FILEFLAGS)
  */
 enum rpmfileAttrs_e {
     RPMFILE_NONE	= 0,
@@ -59,8 +59,7 @@ enum rpmfileAttrs_e {
     RPMFILE_GHOST	= (1 <<  6),	/*!< from %%ghost */
     RPMFILE_LICENSE	= (1 <<  7),	/*!< from %%license */
     RPMFILE_README	= (1 <<  8),	/*!< from %%readme */
-    RPMFILE_EXCLUDE	= (1 <<  9),	/*!< from %%exclude, internal */
-    RPMFILE_UNPATCHED	= (1 << 10),	/*!< placeholder (SuSE) */
+    /* bits 9-10 unused */
     RPMFILE_PUBKEY	= (1 << 11),	/*!< from %%pubkey */
 };
 
@@ -207,7 +206,7 @@ int rpmfiDigestAlgo(rpmfi fi);
 /** \ingroup rpmfi
  * Return current file (binary) digest of file info set.
  * @param fi		file info set
- * @retval algo		digest hash algoritm used (pass NULL to ignore)
+ * @retval algo		digest hash algorithm used (pass NULL to ignore)
  * @retval diglen	digest hash length (pass NULL to ignore)
  * @return		current file digest, NULL on invalid
  */
@@ -219,7 +218,7 @@ const unsigned char * rpmfiFDigest(rpmfi fi, int *algo, size_t *diglen);
  * memory, this converts the binary data back to hex presentation used in
  * headers. 
  * @param fi		file info set
- * @retval algo		digest hash algoritm used (pass NULL to ignore)
+ * @retval algo		digest hash algorithm used (pass NULL to ignore)
  * @return		current file digest (malloc'ed), NULL on invalid
  */
 char * rpmfiFDigestHex(rpmfi fi, int *algo);
@@ -413,6 +412,16 @@ typedef rpmFlags rpmfiFlags;
 
 /** \ingroup rpmfi
  * Create and load a file info set.
+ * @param pool		shared string pool (or NULL for private pool)
+ * @param h		header
+ * @param tagN		unused
+ * @param flags		Flags to control what information is loaded.
+ * @return		new file info set
+ */
+rpmfi rpmfiNewPool(rpmstrPool pool, Header h, rpmTagVal tagN, rpmfiFlags flags);
+
+/** \ingroup rpmfi
+ * Create and load a file info set.
  * @param ts		unused
  * @param h		header
  * @param tagN		unused
@@ -441,7 +450,7 @@ int rpmfiCompare(const rpmfi afi, const rpmfi bfi);
  * @param ofi		old file info
  * @param nfi		new file info
  * @param skipMissing	OK to skip missing files?
- * @return		file dispostion
+ * @return		file disposition
  */
 rpmFileAction rpmfiDecideFate(const rpmfi ofi, rpmfi nfi, int skipMissing);
 

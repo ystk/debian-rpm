@@ -96,7 +96,7 @@
  * @return	None
  *
  * - ts.setFlags(transFlags) Set transaction set flags.
- * @param transFlags - bit(s) to controll transaction operations. The
+ * @param transFlags - bit(s) to control transaction operations. The
  *		following values can be logically OR'ed together:
  *	- rpm.RPMTRANS_FLAG_TEST - test mode, do not modify the RPM
  *		database, change any files, or run any package scripts
@@ -607,6 +607,10 @@ rpmts_Match(rpmtsObject * s, PyObject * args, PyObject * kwds)
     if (Key) {
 	if (PyInt_Check(Key)) {
 	    lkey = PyInt_AsLong(Key);
+	    key = (char *)&lkey;
+	    len = sizeof(lkey);
+	} else if (PyLong_Check(Key)) {
+	    lkey = PyLong_AsLong(Key);
 	    key = (char *)&lkey;
 	    len = sizeof(lkey);
 	} else if (utf8FromPyObject(Key, &str)) {

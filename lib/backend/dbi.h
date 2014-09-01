@@ -17,15 +17,6 @@ struct dbConfig_s {
     int	db_no_fsync;	/*!< no-op fsync for db */
 };
 
-#undef HASHTYPE
-#undef HTKEYTYPE
-#undef HTDATATYPE
-#define HASHTYPE intHash
-#define HTKEYTYPE unsigned int
-#include "lib/rpmhash.H"
-#undef HASHTYPE
-#undef HTKEYTYPE
-
 /** \ingroup rpmdb
  * Describes the collection of index databases used by rpm.
  */
@@ -37,7 +28,7 @@ struct rpmdb_s {
     int		db_mode;	/*!< open mode */
     int		db_perms;	/*!< open permissions */
     int		db_ver;		/*!< Berkeley DB version */
-    intHash	db_checked;	/*!< headerCheck()'ed package instances */
+    struct dbChk_s * db_checked;/*!< headerCheck()'ed package instances */
     rpmdb	db_next;
     int		db_opens;
     int		db_ndbi;	/*!< No. of tag indices. */

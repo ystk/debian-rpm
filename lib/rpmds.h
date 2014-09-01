@@ -72,7 +72,8 @@ typedef rpmFlags rpmsenseFlags;
     RPMSENSE_KEYRING | \
     RPMSENSE_PRETRANS | \
     RPMSENSE_POSTTRANS | \
-    RPMSENSE_PREREQ)
+    RPMSENSE_PREREQ | \
+    RPMSENSE_MISSINGOK)
 
 #define	_notpre(_x)		((_x) & ~RPMSENSE_PREREQ)
 #define	_INSTALL_ONLY_MASK \
@@ -97,6 +98,7 @@ rpmds rpmdsLink(rpmds ds);
  * @return		NULL always
  */
 rpmds rpmdsFree(rpmds ds);
+
 /** \ingroup rpmds
  * Create and load a dependency set.
  * @param h		header
@@ -278,7 +280,7 @@ int rpmdsFind(rpmds ds, const rpmds ods);
  * Merge a dependency set maintaining (N,EVR,Flags) sorted order.
  * @retval *dsp		(merged) dependency set
  * @param ods		dependency set to merge
- * @return		(merged) dependency index
+ * @return		number of merged dependencies, -1 on error
  */
 int rpmdsMerge(rpmds * dsp, rpmds ods);
 
@@ -335,6 +337,48 @@ int rpmdsNVRMatchesDep(const Header h, const rpmds req, int nopromote);
  * @return		0 on success
  */
 int rpmdsRpmlib(rpmds * dsp, const void * tblp);
+
+/** \ingroup rpmds
+ * Create and load a dependency set.
+ * @param pool		shared string pool (or NULL for private pool)
+ * @param h		header
+ * @param tagN		type of dependency
+ * @param flags		unused
+ * @return		new dependency set
+ */
+rpmds rpmdsNewPool(rpmstrPool pool, Header h, rpmTagVal tagN, int flags);
+
+/** \ingroup rpmds
+ * Create, load and initialize a dependency for this header. 
+ * @param pool		string pool (or NULL for private pool)
+ * @param h		header
+ * @param tagN		type of dependency
+ * @param Flags		comparison flags
+ * @return		new dependency set
+ */
+rpmds rpmdsThisPool(rpmstrPool pool,
+		    Header h, rpmTagVal tagN, rpmsenseFlags Flags);
+
+/** \ingroup rpmds
+ * Create, load and initialize a dependency set of size 1.
+ * @param pool		string pool (or NULL for private pool)
+ * @param tagN		type of dependency
+ * @param N		name
+ * @param EVR		epoch:version-release
+ * @param Flags		comparison flags
+ * @return		new dependency set
+ */
+rpmds rpmdsSinglePool(rpmstrPool pool, rpmTagVal tagN,
+		      const char * N, const char * EVR, rpmsenseFlags Flags);
+
+/**
+ * Load rpmlib provides into a dependency set.
+ * @param pool		shared string pool (or NULL for private pool)
+ * @retval *dsp		(loaded) depedency set
+ * @param tblp		rpmlib provides table (NULL uses internal table)
+ * @return		0 on success
+ */
+int rpmdsRpmlibPool(rpmstrPool pool, rpmds * dsp, const void * tblp);
 
 #ifdef __cplusplus
 }

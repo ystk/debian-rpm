@@ -36,6 +36,18 @@
 #include "lib/header_internal.h"	/* XXX for headerSetInstance() */
 #include "debug.h"
 
+#undef HASHTYPE
+#undef HTKEYTYPE
+#undef HTDATATYPE
+#define HASHTYPE dbChk
+#define HTKEYTYPE unsigned int
+#define HTDATATYPE rpmRC
+#include "lib/rpmhash.H"
+#include "lib/rpmhash.C"
+#undef HASHTYPE
+#undef HTKEYTYPE
+#undef HTDATATYPE
+
 static rpmDbiTag const dbiTags[] = {
     RPMDBI_PACKAGES,
     RPMDBI_NAME,
@@ -186,8 +198,8 @@ static dbiIndex rpmdbOpenIndex(rpmdb db, rpmDbiTagVal rpmtag, int flags)
 	if (dbiType(dbi) == DBI_PRIMARY) {
 	    /* Allocate based on max header instance number + some reserve */
 	    if (!verifyonly && (db->db_checked == NULL)) {
-		db->db_checked = intHashCreate(1024 + pkgInstance(dbi, 0) / 4,
-						uintId, uintCmp, NULL);
+		db->db_checked = dbChkCreate(1024 + pkgInstance(dbi, 0) / 4,
+						uintId, uintCmp, NULL, NULL);
 	    }
 	    /* If primary got created, we can safely run without fsync */
 	    if ((!verifyonly && (dbiFlags(dbi) & DBI_CREATED)) || db->cfg.db_no_fsync) {
@@ -736,7 +748,7 @@ int rpmdbClose(rpmdb db)
     db->db_root = _free(db->db_root);
     db->db_home = _free(db->db_home);
     db->db_fullpath = _free(db->db_fullpath);
-    db->db_checked = intHashFree(db->db_checked);
+    db->db_checked = dbChkFree(db->db_checked);
     db->_dbi = _free(db->_dbi);
 
     prev = &rpmdbRock;
@@ -815,7 +827,7 @@ static int openDatabase(const char * prefix,
     if (db == NULL)
 	return 1;
 
-    /* Try to ensure db home exists, error out if we cant even create */
+    /* Try to ensure db home exists, error out if we can't even create */
     rc = rpmioMkpath(rpmdbHome(db), 0755, getuid(), getgid());
     if (rc == 0) {
 	if (rpmdbRock == NULL) {
@@ -921,7 +933,7 @@ static int rpmdbFindByFile(rpmdb db, dbiIndex dbi, const char *filespec,
     char * dirName = NULL;
     const char * baseName;
     fingerPrintCache fpc = NULL;
-    fingerPrint fp1;
+    fingerPrint * fp1 = NULL;
     dbiIndexSet allMatches = NULL;
     unsigned int i;
     int rc = -2; /* assume error */
@@ -946,8 +958,8 @@ static int rpmdbFindByFile(rpmdb db, dbiIndex dbi, const char *filespec,
     if (rc || allMatches == NULL) goto exit;
 
     *matches = xcalloc(1, sizeof(**matches));
-    fpc = fpCacheCreate(allMatches->count);
-    fp1 = fpLookup(fpc, dirName, baseName, 1);
+    fpc = fpCacheCreate(allMatches->count, NULL);
+    fpLookup(fpc, dirName, baseName, &fp1);
 
     i = 0;
     while (i < allMatches->count) {
@@ -973,7 +985,6 @@ static int rpmdbFindByFile(rpmdb db, dbiIndex dbi, const char *filespec,
 	    headerGet(h, RPMTAG_FILESTATES, &fs, HEADERGET_MINMEM);
 
 	do {
-	    fingerPrint fp2;
 	    int num = dbiIndexRecordFileNumber(allMatches, i);
 	    int skip = 0;
 
@@ -985,9 +996,8 @@ static int rpmdbFindByFile(rpmdb db, dbiIndex dbi, const char *filespec,
 	    }
 
 	    if (!skip) {
-		fp2 = fpLookup(fpc, dirNames[dirIndexes[num]],
-				    baseNames[num], 1);
-		if (FP_EQUAL(fp1, fp2)) {
+		const char *dirName = dirNames[dirIndexes[num]];
+		if (fpLookupEquals(fpc, fp1, dirName, baseNames[num])) {
 		    struct dbiIndexItem rec = { 
 			.hdrNum = dbiIndexRecordOffset(allMatches, i),
 			.tagNum = dbiIndexRecordFileNumber(allMatches, i),
@@ -1010,6 +1020,7 @@ static int rpmdbFindByFile(rpmdb db, dbiIndex dbi, const char *filespec,
 	headerFree(h);
     }
 
+    free(fp1);
     fpCacheFree(fpc);
 
     if ((*matches)->count == 0) {
@@ -1047,13 +1058,14 @@ int rpmdbCountPackages(rpmdb db, const char * name)
 }
 
 /**
- * Attempt partial matches on name[-version[-release]] strings.
+ * Attempt partial matches on name[-version[-release]][.arch] strings.
  * @param db		rpmdb handle
  * @param dbc		index database cursor
  * @param name		package name
  * @param epoch 	package epoch (-1 for any epoch)
  * @param version	package version (can be a pattern)
  * @param release	package release (can be a pattern)
+ * @param arch		package arch (can be a pattern)
  * @retval matches	set of header instances that match
  * @return 		RPMRC_OK on match, RPMRC_NOMATCH or RPMRC_FAIL
  */
@@ -1062,6 +1074,7 @@ static rpmRC dbiFindMatches(rpmdb db, dbiCursor dbc,
 		int64_t epoch,
 		const char * version,
 		const char * release,
+		const char * arch,
 		dbiIndexSet * matches)
 {
     unsigned int gotMatches = 0;
@@ -1072,7 +1085,7 @@ static rpmRC dbiFindMatches(rpmdb db, dbiCursor dbc,
 
     if (rc != 0) {
 	return (rc == DB_NOTFOUND) ? RPMRC_NOTFOUND : RPMRC_FAIL;
-    } else if (epoch < 0 && version == NULL && release == NULL) {
+    } else if (epoch < 0 && version == NULL && release == NULL && arch == NULL) {
 	return RPMRC_OK;
     }
 
@@ -1096,6 +1109,12 @@ static rpmRC dbiFindMatches(rpmdb db, dbiCursor dbc,
 	}
 	if (release &&
 	    rpmdbSetIteratorRE(mi, RPMTAG_RELEASE, RPMMIRE_DEFAULT, release))
+	{
+	    rc = RPMRC_FAIL;
+	    goto exit;
+	}
+	if (arch &&
+	    rpmdbSetIteratorRE(mi, RPMTAG_ARCH, RPMMIRE_DEFAULT, arch))
 	{
 	    rc = RPMRC_FAIL;
 	    goto exit;
@@ -1137,13 +1156,15 @@ exit:
  * @param db		rpmdb handle
  * @param dbi		index database handle (always RPMDBI_NAME)
  * @param arg		name[-[epoch:]version[-release]] string
+ * @param arglen	length of arg
+ * @param arch		possible arch string (or NULL)
  * @retval matches	set of header instances that match
  * @return 		RPMRC_OK on match, RPMRC_NOMATCH or RPMRC_FAIL
  */
-static rpmRC dbiFindByLabel(rpmdb db, dbiIndex dbi, const char * arg,
+static rpmRC dbiFindByLabelArch(rpmdb db, dbiIndex dbi,
+			    const char * arg, size_t arglen, const char *arch,
 			    dbiIndexSet * matches)
 {
-    size_t arglen = (arg != NULL) ? strlen(arg) : 0;
     char localarg[arglen+1];
     int64_t epoch;
     const char * version;
@@ -1156,9 +1177,12 @@ static rpmRC dbiFindByLabel(rpmdb db, dbiIndex dbi, const char * arg,
 
     if (arglen == 0) return RPMRC_NOTFOUND;
 
+    strncpy(localarg, arg, arglen);
+    localarg[arglen] = '\0';
+
     dbc = dbiCursorInit(dbi, 0);
     /* did they give us just a name? */
-    rc = dbiFindMatches(db, dbc, arg, -1, NULL, NULL, matches);
+    rc = dbiFindMatches(db, dbc, localarg, -1, NULL, NULL, arch, matches);
     if (rc != RPMRC_NOTFOUND)
 	goto exit;
 
@@ -1166,7 +1190,7 @@ static rpmRC dbiFindByLabel(rpmdb db, dbiIndex dbi, const char * arg,
     *matches = dbiIndexSetFree(*matches);
 
     /* maybe a name-[epoch:]version ? */
-    s = stpcpy(localarg, arg);
+    s = localarg + arglen;
 
     c = '\0';
     brackets = 0;
@@ -1193,7 +1217,7 @@ static rpmRC dbiFindByLabel(rpmdb db, dbiIndex dbi, const char * arg,
     *s = '\0';
 
     epoch = splitEpoch(s + 1, &version);
-    rc = dbiFindMatches(db, dbc, localarg, epoch, version, NULL, matches);
+    rc = dbiFindMatches(db, dbc, localarg, epoch, version, NULL, arch, matches);
     if (rc != RPMRC_NOTFOUND) goto exit;
 
     /* FIX: double indirection */
@@ -1227,9 +1251,23 @@ static rpmRC dbiFindByLabel(rpmdb db, dbiIndex dbi, const char * arg,
     *s = '\0';
    	/* FIX: *matches may be NULL. */
     epoch = splitEpoch(s + 1, &version);
-    rc = dbiFindMatches(db, dbc, localarg, epoch, version, release, matches);
+    rc = dbiFindMatches(db, dbc, localarg, epoch, version, release, arch, matches);
 exit:
     dbiCursorFree(dbc);
+    return rc;
+}
+
+static rpmRC dbiFindByLabel(rpmdb db, dbiIndex dbi, const char * label,
+			    dbiIndexSet * matches)
+{
+    const char *arch = NULL;
+    /* First, try with label as it is */
+    rpmRC rc = dbiFindByLabelArch(db, dbi, label, strlen(label), NULL, matches);
+
+    /* If not found, retry with possible .arch specifier if there is one */
+    if (rc == RPMRC_NOTFOUND && (arch = strrchr(label, '.')))
+	rc = dbiFindByLabelArch(db, dbi, label, arch-label, arch+1, matches);
+
     return rc;
 }
 
@@ -1703,8 +1741,11 @@ static rpmRC miVerifyHeader(rpmdbMatchIterator mi, const void *uh, size_t uhlen)
 
     /* Don't bother re-checking a previously read header. */
     if (mi->mi_db->db_checked) {
-	if (intHashHasEntry(mi->mi_db->db_checked, mi->mi_offset))
-	    rpmrc = RPMRC_OK;
+	rpmRC *res;
+	if (dbChkGetEntry(mi->mi_db->db_checked, mi->mi_offset,
+			  &res, NULL, NULL)) {
+	    rpmrc = res[0];
+	}
     }
 
     /* If blob is unchecked, check blob import consistency now. */
@@ -1720,8 +1761,8 @@ static rpmRC miVerifyHeader(rpmdbMatchIterator mi, const void *uh, size_t uhlen)
 	msg = _free(msg);
 
 	/* Mark header checked. */
-	if (mi->mi_db && mi->mi_db->db_checked && rpmrc != RPMRC_FAIL) {
-	    intHashAddEntry(mi->mi_db->db_checked, mi->mi_offset);
+	if (mi->mi_db && mi->mi_db->db_checked) {
+	    dbChkAddEntry(mi->mi_db->db_checked, mi->mi_offset, rpmrc);
 	}
     }
     return rpmrc;
@@ -1926,9 +1967,9 @@ int rpmdbExtendIterator(rpmdbMatchIterator mi,
     return rc;
 }
 
-int rpmdbPruneIterator(rpmdbMatchIterator mi, intHash hdrNums)
+int rpmdbPruneIterator(rpmdbMatchIterator mi, removedHash hdrNums)
 {
-    if (mi == NULL || hdrNums == NULL || intHashNumKeys(hdrNums) <= 0)
+    if (mi == NULL || hdrNums == NULL || removedHashNumKeys(hdrNums) <= 0)
 	return 1;
 
     if (!mi->mi_set)
@@ -1941,7 +1982,7 @@ int rpmdbPruneIterator(rpmdbMatchIterator mi, intHash hdrNums)
     assert(mi->mi_set->count > 0);
 
     for (from = 0; from < num; from++) {
-	if (intHashHasEntry(hdrNums, mi->mi_set->recs[from].hdrNum)) {
+	if (removedHashHasEntry(hdrNums, mi->mi_set->recs[from].hdrNum)) {
 	    mi->mi_set->count--;
 	    continue;
 	}
@@ -2679,12 +2720,12 @@ int rpmdbAdd(rpmdb db, Header h)
 	}
     }
 
-    /* If everthing ok, mark header as installed now */
+    /* If everything ok, mark header as installed now */
     if (ret == 0) {
 	headerSetInstance(h, hdrNum);
 	/* Purge our verification cache on added public keys */
 	if (db->db_checked && headerIsEntry(h, RPMTAG_PUBKEYS)) {
-	    intHashEmpty(db->db_checked);
+	    dbChkEmpty(db->db_checked);
 	}
     }
 

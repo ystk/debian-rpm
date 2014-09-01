@@ -29,7 +29,7 @@ typedef struct OpenFileInfo {
     FILE *fp;
     int lineNum;
     char readBuf[BUFSIZ];
-    char * readPtr;
+    const char * readPtr;
     struct OpenFileInfo * next;
 } OFI_t;
 
@@ -109,31 +109,35 @@ void handleComments(char *s)
 	*s = '\0';
 }
 
-static struct OpenFileInfo * newOpenFileInfo(void)
+/* Push a file to spec's file stack, return the newly pushed entry */
+static OFI_t * pushOFI(rpmSpec spec, const char *fn)
 {
-    struct OpenFileInfo *ofi;
+    OFI_t *ofi = xcalloc(1, sizeof(*ofi));
 
-    ofi = xmalloc(sizeof(*ofi));
     ofi->fp = NULL;
-    ofi->fileName = NULL;
+    ofi->fileName = xstrdup(fn);
     ofi->lineNum = 0;
     ofi->readBuf[0] = '\0';
     ofi->readPtr = NULL;
-    ofi->next = NULL;
+    ofi->next = spec->fileStack;
 
-    return ofi;
+    spec->fileStack = ofi;
+    return spec->fileStack;
 }
 
-/**
- */
-static void forceIncludeFile(rpmSpec spec, const char * fileName)
+/* Pop from spec's file stack */
+static OFI_t * popOFI(rpmSpec spec)
 {
-    OFI_t * ofi;
+    if (spec->fileStack) {
+	OFI_t * ofi = spec->fileStack;
 
-    ofi = newOpenFileInfo();
-    ofi->fileName = xstrdup(fileName);
-    ofi->next = spec->fileStack;
-    spec->fileStack = ofi;
+	spec->fileStack = ofi->next;
+	if (ofi->fp)
+	    fclose(ofi->fp);
+	free(ofi->fileName);
+	free(ofi);
+    }
+    return spec->fileStack;
 }
 
 static int restoreFirstChar(rpmSpec spec)
@@ -150,23 +154,25 @@ static int restoreFirstChar(rpmSpec spec)
 /* Return zero on success, 1 if we need to read more and -1 on errors. */
 static int copyNextLineFromOFI(rpmSpec spec, OFI_t *ofi)
 {
-    char ch;
-
     /* Expand next line from file into line buffer */
     if (!(spec->nextline && *spec->nextline)) {
 	int pc = 0, bc = 0, nc = 0;
-	char *from, *to, *p;
-	to = spec->lbufPtr ? spec->lbufPtr : spec->lbuf;
-	from = ofi->readPtr;
-	ch = ' ';
-	while (from && *from && ch != '\n')
-	    ch = *to++ = *from++;
-	spec->lbufPtr = to;
-	*to = '\0';
+	const char *from = ofi->readPtr;
+	char ch = ' ';
+	while (from && *from && ch != '\n') {
+	    ch = spec->lbuf[spec->lbufOff] = *from;
+	    spec->lbufOff++; from++;
+
+	    if (spec->lbufOff >= spec->lbufSize) {
+		spec->lbufSize += BUFSIZ;
+		spec->lbuf = realloc(spec->lbuf, spec->lbufSize);
+	    }
+	}
+	spec->lbuf[spec->lbufOff] = '\0';
 	ofi->readPtr = from;
 
 	/* Check if we need another line before expanding the buffer. */
-	for (p = spec->lbuf; *p; p++) {
+	for (const char *p = spec->lbuf; *p; p++) {
 	    switch (*p) {
 		case '\\':
 		    switch (*(p+1)) {
@@ -195,11 +201,11 @@ static int copyNextLineFromOFI(rpmSpec spec, OFI_t *ofi)
 	    spec->nextline = "";
 	    return 1;
 	}
-	spec->lbufPtr = spec->lbuf;
+	spec->lbufOff = 0;
 
 	/* Don't expand macros (eg. %define) in false branch of %if clause */
 	if (spec->readStack->reading &&
-	    expandMacros(spec, spec->macros, spec->lbuf, sizeof(spec->lbuf))) {
+	    expandMacros(spec, spec->macros, spec->lbuf, spec->lbufSize)) {
 		rpmlog(RPMLOG_ERR, _("line %d: %s\n"),
 			spec->lineNum, spec->lbuf);
 		return -1;
@@ -253,20 +259,10 @@ retry:
     /* Make sure we have something in the read buffer */
     if (!(ofi->readPtr && *(ofi->readPtr))) {
 	if (!fgets(ofi->readBuf, BUFSIZ, ofi->fp)) {
-	    /* EOF */
-	    if (spec->readStack->next) {
-		rpmlog(RPMLOG_ERR, _("Unclosed %%if\n"));
-	        return PART_ERROR;
-	    }
-
-	    /* remove this file from the stack */
-	    spec->fileStack = ofi->next;
-	    fclose(ofi->fp);
-	    free(ofi->fileName);
-	    free(ofi);
+	    /* EOF, remove this file from the stack */
+	    ofi = popOFI(spec);
 
 	    /* only on last file do we signal EOF to caller */
-	    ofi = spec->fileStack;
 	    if (ofi == NULL)
 		return 1;
 
@@ -308,7 +304,11 @@ int readLine(rpmSpec spec, int strip)
     if (!restoreFirstChar(spec)) {
     retry:
 	if ((rc = readLineFromOFI(spec, ofi)) != 0) {
-	    if (startLine > 0) {
+	    if (spec->readStack->next) {
+		rpmlog(RPMLOG_ERR, _("line %d: Unclosed %%if\n"),
+			spec->readStack->lineNum);
+		rc = PART_ERROR;
+	    } else if (startLine > 0) {
 		rpmlog(RPMLOG_ERR,
 		    _("line %d: unclosed macro or bad line continuation\n"),
 		    startLine);
@@ -388,15 +388,14 @@ int readLine(rpmSpec spec, int strip)
 	SKIPNONSPACE(endFileName);
 	p = endFileName;
 	SKIPSPACE(p);
-	if (*p != '\0') {
-	    rpmlog(RPMLOG_ERR, _("malformed %%include statement\n"));
+	if (*fileName == '\0' || *p != '\0') {
+	    rpmlog(RPMLOG_ERR, _("%s:%d: malformed %%include statement\n"),
+				ofi->fileName, ofi->lineNum);
 	    return PART_ERROR;
 	}
 	*endFileName = '\0';
 
-	forceIncludeFile(spec, fileName);
-
-	ofi = spec->fileStack;
+	ofi = pushOFI(spec, fileName);
 	goto retry;
     }
 
@@ -404,6 +403,7 @@ int readLine(rpmSpec spec, int strip)
 	rl = xmalloc(sizeof(*rl));
 	rl->reading = spec->readStack->reading && match;
 	rl->next = spec->readStack;
+	rl->lineNum = ofi->lineNum;
 	spec->readStack = rl;
 	spec->line[0] = '\0';
     }
@@ -423,15 +423,7 @@ int readLine(rpmSpec spec, int strip)
 
 void closeSpec(rpmSpec spec)
 {
-    OFI_t *ofi;
-
-    while (spec->fileStack) {
-	ofi = spec->fileStack;
-	spec->fileStack = spec->fileStack->next;
-	if (ofi->fp) (void) fclose(ofi->fp);
-	free(ofi->fileName);
-	free(ofi);
-    }
+    while (popOFI(spec)) {};
 }
 
 static const rpmTagVal sourceTags[] = {
@@ -455,16 +447,20 @@ static const rpmTagVal sourceTags[] = {
     RPMTAG_URL,
     RPMTAG_BUGURL,
     RPMTAG_HEADERI18NTABLE,
+    RPMTAG_VCS,
     0
 };
 
 static void initSourceHeader(rpmSpec spec)
 {
+    Package sourcePkg = spec->sourcePackage;
     struct Source *srcPtr;
 
-    spec->sourceHeader = headerNew();
+    if (headerIsEntry(sourcePkg->header, RPMTAG_NAME))
+	return;
+
     /* Only specific tags are added to the source package header */
-    headerCopyTags(spec->packages->header, spec->sourceHeader, sourceTags);
+    headerCopyTags(spec->packages->header, sourcePkg->header, sourceTags);
 
     /* Add the build restrictions */
     {
@@ -472,7 +468,7 @@ static void initSourceHeader(rpmSpec spec)
 	struct rpmtd_s td;
 	while (headerNext(hi, &td)) {
 	    if (rpmtdCount(&td) > 0) {
-		(void) headerPut(spec->sourceHeader, &td, HEADERPUT_DEFAULT);
+		(void) headerPut(sourcePkg->header, &td, HEADERPUT_DEFAULT);
 	    }
 	    rpmtdFreeData(&td);
 	}
@@ -480,23 +476,23 @@ static void initSourceHeader(rpmSpec spec)
     }
 
     if (spec->BANames && spec->BACount > 0) {
-	headerPutStringArray(spec->sourceHeader, RPMTAG_BUILDARCHS,
+	headerPutStringArray(sourcePkg->header, RPMTAG_BUILDARCHS,
 		  spec->BANames, spec->BACount);
     }
 
     /* Add tags for sources and patches */
     for (srcPtr = spec->sources; srcPtr != NULL; srcPtr = srcPtr->next) {
 	if (srcPtr->flags & RPMBUILD_ISSOURCE) {
-	    headerPutString(spec->sourceHeader, RPMTAG_SOURCE, srcPtr->source);
+	    headerPutString(sourcePkg->header, RPMTAG_SOURCE, srcPtr->source);
 	    if (srcPtr->flags & RPMBUILD_ISNO) {
-		headerPutUint32(spec->sourceHeader, RPMTAG_NOSOURCE,
+		headerPutUint32(sourcePkg->header, RPMTAG_NOSOURCE,
 				&srcPtr->num, 1);
 	    }
 	}
 	if (srcPtr->flags & RPMBUILD_ISPATCH) {
-	    headerPutString(spec->sourceHeader, RPMTAG_PATCH, srcPtr->source);
+	    headerPutString(sourcePkg->header, RPMTAG_PATCH, srcPtr->source);
 	    if (srcPtr->flags & RPMBUILD_ISNO) {
-		headerPutUint32(spec->sourceHeader, RPMTAG_NOPATCH,
+		headerPutUint32(sourcePkg->header, RPMTAG_NOPATCH,
 				&srcPtr->num, 1);
 	    }
 	}
@@ -504,19 +500,17 @@ static void initSourceHeader(rpmSpec spec)
 }
 
 /* Add extra provides to package.  */
-static void addPackageProvides(Header h)
+static void addPackageProvides(Package pkg)
 {
     const char *arch, *name;
     char *evr, *isaprov;
     rpmsenseFlags pflags = RPMSENSE_EQUAL;
 
     /* <name> = <evr> provide */
-    name = headerGetString(h, RPMTAG_NAME);
-    arch = headerGetString(h, RPMTAG_ARCH);
-    evr = headerGetAsString(h, RPMTAG_EVR);
-    headerPutString(h, RPMTAG_PROVIDENAME, name);
-    headerPutString(h, RPMTAG_PROVIDEVERSION, evr);
-    headerPutUint32(h, RPMTAG_PROVIDEFLAGS, &pflags, 1);
+    name = headerGetString(pkg->header, RPMTAG_NAME);
+    arch = headerGetString(pkg->header, RPMTAG_ARCH);
+    evr = headerGetAsString(pkg->header, RPMTAG_EVR);
+    addReqProv(pkg, RPMTAG_PROVIDENAME, name, evr, pflags, 0);
 
     /*
      * <name>(<isa>) = <evr> provide
@@ -525,9 +519,7 @@ static void addPackageProvides(Header h)
      */
     isaprov = rpmExpand(name, "%{?_isa}", NULL);
     if (!rstreq(arch, "noarch") && !rstreq(name, isaprov)) {
-	headerPutString(h, RPMTAG_PROVIDENAME, isaprov);
-	headerPutString(h, RPMTAG_PROVIDEVERSION, evr);
-	headerPutUint32(h, RPMTAG_PROVIDEFLAGS, &pflags, 1);
+	addReqProv(pkg, RPMTAG_PROVIDENAME, isaprov, evr, pflags, 0);
     }
     free(isaprov);
     free(evr);
@@ -550,7 +542,7 @@ static void addTargets(Package Pkgs)
 	headerPutString(pkg->header, RPMTAG_OPTFLAGS, optflags);
 
 	pkg->ds = rpmdsThis(pkg->header, RPMTAG_REQUIRENAME, RPMSENSE_EQUAL);
-	addPackageProvides(pkg->header);
+	addPackageProvides(pkg);
     }
     free(platform);
     free(arch);
@@ -569,8 +561,7 @@ static rpmSpec parseSpec(const char *specFile, rpmSpecFlags flags,
     spec = newSpec();
 
     spec->specFile = rpmGetPath(specFile, NULL);
-    spec->fileStack = newOpenFileInfo();
-    spec->fileStack->fileName = xstrdup(spec->specFile);
+    pushOFI(spec, spec->specFile);
     /* If buildRoot not specified, use default %{buildroot} */
     if (buildRoot) {
 	spec->buildRoot = xstrdup(buildRoot);
@@ -578,6 +569,7 @@ static rpmSpec parseSpec(const char *specFile, rpmSpecFlags flags,
 	spec->buildRoot = rpmGetPath("%{?buildroot:%{buildroot}}", NULL);
     }
     addMacro(NULL, "_docdir", NULL, "%{_defaultdocdir}", RMIL_SPEC);
+    addMacro(NULL, "_licensedir", NULL, "%{_defaultlicensedir}", RMIL_SPEC);
     spec->recursing = recursing;
     spec->flags = flags;
 

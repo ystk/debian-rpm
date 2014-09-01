@@ -57,10 +57,42 @@ static uint32_t db_envflags(DB * db)
     return eflags;
 }
 
+/*
+ * Try to acquire db environment open/close serialization lock.
+ * Return the open, locked fd on success, -1 on failure.
+ */
+static int serialize_env(const char *dbhome)
+{
+    char *lock_path = rstrscat(NULL, dbhome, "/.dbenv.lock", NULL);
+    mode_t oldmask = umask(022);
+    int fd = open(lock_path, (O_RDWR|O_CREAT), 0644);
+    umask(oldmask);
+
+    if (fd >= 0) {
+	int rc;
+	struct flock info;
+	memset(&info, 0, sizeof(info));
+	info.l_type = F_WRLCK;
+	info.l_whence = SEEK_SET;
+	do {
+	    rc = fcntl(fd, F_SETLKW, &info);
+	} while (rc == -1 && errno == EINTR);
+	    
+	if (rc == -1) {
+	    close(fd);
+	    fd = -1;
+	}
+    }
+
+    free(lock_path);
+    return fd;
+}
+
 static int db_fini(rpmdb rdb, const char * dbhome)
 {
     DB_ENV * dbenv = rdb->db_dbenv;
     int rc;
+    int lockfd = -1;
     uint32_t eflags = 0;
 
     if (dbenv == NULL)
@@ -72,6 +104,9 @@ static int db_fini(rpmdb rdb, const char * dbhome)
     }
 
     (void) dbenv->get_open_flags(dbenv, &eflags);
+    if (!(eflags & DB_PRIVATE))
+	lockfd = serialize_env(dbhome);
+
     rc = dbenv->close(dbenv, 0);
     rc = dbapi_err(rdb, "dbenv->close", rc, _debug);
 
@@ -89,6 +124,10 @@ static int db_fini(rpmdb rdb, const char * dbhome)
 	rpmlog(RPMLOG_DEBUG, "removed  db environment %s\n", dbhome);
 
     }
+
+    if (lockfd >= 0)
+	close(lockfd);
+
     return rc;
 }
 
@@ -122,6 +161,7 @@ static int db_init(rpmdb rdb, const char * dbhome)
     DB_ENV *dbenv = NULL;
     int rc, xx;
     int retry_open = 2;
+    int lockfd = -1;
     struct dbConfig_s * cfg = &rdb->cfg;
     /* This is our setup, thou shall not have other setups before us */
     uint32_t eflags = (DB_CREATE|DB_INIT_MPOOL|DB_INIT_CDB);
@@ -176,6 +216,24 @@ static int db_init(rpmdb rdb, const char * dbhome)
     }
 
     /*
+     * Serialize shared environment open (and clock) via fcntl() lock.
+     * Otherwise we can end up calling dbenv->failchk() while another
+     * process is joining the environment, leading to transient
+     * DB_RUNRECOVER errors. Also prevents races wrt removing the
+     * environment (eg chrooted operation). Silently fall back to
+     * private environment on failure to allow non-privileged queries
+     * to "work", broken as it might be.
+     */
+    if (!(eflags & DB_PRIVATE)) {
+	lockfd = serialize_env(dbhome);
+	if (lockfd < 0) {
+	    eflags |= DB_PRIVATE;
+	    retry_open--;
+	    rpmlog(RPMLOG_DEBUG, "serialize failed, using private dbenv\n");
+	}
+    }
+
+    /*
      * Actually open the environment. Fall back to private environment
      * if we dont have permission to join/create shared environment or
      * system doesn't support it..
@@ -186,7 +244,7 @@ static int db_init(rpmdb rdb, const char * dbhome)
 	free(fstr);
 
 	rc = (dbenv->open)(dbenv, dbhome, eflags, rdb->db_perms);
-	if ((rc == EACCES || rc == EROFS || rc == EINVAL) && errno == rc) {
+	if ((rc == EACCES || rc == EROFS) || (rc == EINVAL && errno == rc)) {
 	    eflags |= DB_PRIVATE;
 	    retry_open--;
 	} else {
@@ -208,6 +266,8 @@ static int db_init(rpmdb rdb, const char * dbhome)
     rdb->db_dbenv = dbenv;
     rdb->db_opens = 1;
 
+    if (lockfd >= 0)
+	close(lockfd);
     return 0;
 
 errxit:
@@ -216,12 +276,18 @@ errxit:
 	xx = dbenv->close(dbenv, 0);
 	xx = dbapi_err(rdb, "dbenv->close", xx, _debug);
     }
+    if (lockfd >= 0)
+	close(lockfd);
     return rc;
 }
 
 void dbSetFSync(void *dbenv, int enable)
 {
+#ifdef HAVE_FDATASYNC
     db_env_set_func_fsync(enable ? fdatasync : fsync_disable);
+#else
+    db_env_set_func_fsync(enable ? fsync : fsync_disable);
+#endif
 }
 
 int dbiSync(dbiIndex dbi, unsigned int flags)
@@ -244,7 +310,7 @@ dbiCursor dbiCursorInit(dbiIndex dbi, unsigned int flags)
 	DB * db = dbi->dbi_db;
 	DBC * cursor;
 	int cflags;
-	int rc;
+	int rc = 0;
 	uint32_t eflags = db_envflags(db);
 	
        /* DB_WRITECURSOR requires CDB and writable db */
@@ -255,8 +321,23 @@ dbiCursor dbiCursorInit(dbiIndex dbi, unsigned int flags)
 	} else
 	    cflags = 0;
 
-	rc = db->cursor(db, NULL, &cursor, cflags);
-	rc = cvtdberr(dbi, "db->cursor", rc, _debug);
+	/*
+	 * Check for stale locks which could block writes "forever".
+	 * XXX: Should we also do this on reads? Reads are less likely
+	 *      to get blocked so it seems excessive...
+	 * XXX: On DB_RUNRECOVER, we should abort everything. Now
+	 *      we'll just fail to open a cursor again and again and again.
+	 */
+	if (cflags & DB_WRITECURSOR) {
+	    DB_ENV *dbenv = db->get_env(db);
+	    rc = dbenv->failchk(dbenv, 0);
+	    rc = cvtdberr(dbi, "dbenv->failchk", rc, _debug);
+	}
+
+	if (rc == 0) {
+	    rc = db->cursor(db, NULL, &cursor, cflags);
+	    rc = cvtdberr(dbi, "db->cursor", rc, _debug);
+	}
 
 	if (rc == 0) {
 	    dbc = xcalloc(1, sizeof(*dbc));

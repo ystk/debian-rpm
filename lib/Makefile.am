@@ -28,7 +28,8 @@ librpm_la_SOURCES = \
 	cpio.c cpio.h depends.c order.c formats.c tagexts.c fsm.c fsm.h \
 	manifest.c manifest.h package.c \
 	poptALL.c poptI.c poptQV.c psm.c query.c \
-	rpmal.c rpmal.h rpmchecksig.c rpmds.c rpmfi.c rpmfi_internal.h \
+	rpmal.c rpmal.h rpmchecksig.c rpmds.c rpmds_internal.h \
+	rpmfi.c rpmfi_internal.h \
 	rpmgi.h rpmgi.c rpminstall.c rpmts_internal.h \
 	rpmlead.c rpmlead.h rpmps.c rpmprob.c rpmrc.c \
 	rpmte.c rpmte_internal.h rpmts.c rpmfs.h rpmfs.c \
@@ -38,7 +39,7 @@ librpm_la_SOURCES = \
 	rpmchroot.c rpmchroot.h \
 	rpmplugins.c rpmplugins.h rpmug.c rpmug.h
 
-librpm_la_LDFLAGS = -version-info 3:0:0
+librpm_la_LDFLAGS = -version-info 5:1:2
 
 librpm_la_LIBADD = \
 	$(top_builddir)/rpmio/librpmio.la \

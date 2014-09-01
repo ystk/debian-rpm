@@ -2,18 +2,22 @@
 #define _RPMTS_INTERNAL_H
 
 #include <rpm/rpmts.h>
+#include <rpm/rpmstrpool.h>
 
 #include "lib/rpmal.h"		/* XXX availablePackage */
 #include "lib/fprint.h"
 #include "lib/rpmlock.h"
+#include "lib/rpmdb_internal.h"
 
 typedef struct diskspaceInfo_s * rpmDiskSpaceInfo;
 
 /* Transaction set elements information */
 typedef struct tsMembers_s {
-    intHash removedPackages;	/*!< Set of packages being removed. */
+    rpmstrPool pool;		/*!< Global string pool */
+    removedHash removedPackages;	/*!< Set of packages being removed. */
     rpmal addedPackages;	/*!< Set of packages being installed. */
 
+    rpmds rpmlib;		/*!< rpmlib() dependency set. */
     rpmte * order;		/*!< Packages sorted by dependencies. */
     int orderCount;		/*!< No. of transaction elements. */
     int orderAlloced;		/*!< No. of allocated transaction elements. */
@@ -71,8 +75,19 @@ struct rpmts_s {
 extern "C" {
 #endif
 
+/** \ingroup rpmts
+ * Return transaction global string pool handle, creating the pool if needed.
+ * @param ts		transaction set
+ * @return		string pool handle (weak ref)
+ */
+RPM_GNUC_INTERNAL
+rpmstrPool rpmtsPool(rpmts ts);
+
 RPM_GNUC_INTERNAL
 tsMembers rpmtsMembers(rpmts ts);
+
+RPM_GNUC_INTERNAL
+rpmal rpmtsCreateAl(rpmts ts, rpmElementTypes types);
 
 /* returns -1 for retry, 0 for ignore and 1 for not found */
 RPM_GNUC_INTERNAL

@@ -6,9 +6,10 @@ platformdir="${pkglibdir}/platform"
 
 RPMRC="${1:-rpmrc}"
 PLATFORM="${2:-platform}"
-VENDOR="${3}"
-OS="${4}"
-RPMRC_GNU="${5}"
+MACROS="${3:-macros}"
+VENDOR="${4}"
+OS="${5}"
+RPMRC_GNU="${6}"
 
 for ARCH in noarch `grep ^arch_canon $RPMRC | cut -d: -f2`; do
   RPMRC_OPTFLAGS="`sed -n 's/^optflags: '$ARCH' //p' $RPMRC`"
@@ -53,11 +54,17 @@ for ARCH in noarch `grep ^arch_canon $RPMRC | cut -d: -f2`; do
 	CANONARCH=s390x
 	CANONCOLOR=3
 	;;
-    ppc64*)
+    ppc64|ppc64p7)
 	ISANAME=ppc
 	ISABITS=64
 	CANONARCH=ppc64
 	CANONCOLOR=3
+	;;
+    ppc64le)
+	ISANAME=ppc
+        ISABITS=64
+        CANONARCH=ppc64le
+        CANONCOLOR=3
 	;;
     ppc*)
 	ISANAME=ppc
@@ -101,10 +108,16 @@ for ARCH in noarch `grep ^arch_canon $RPMRC | cut -d: -f2`; do
 	CANONARCH=alpha
 	CANONCOLOR=0
 	;;
+    aarch64)
+	ISANAME=aarch
+	ISABITS=64
+	CANONARCH=aarch64
+	CANONCOLOR=3
+	;;
     noarch)
 	CANONARCH=noarch
 	CANONCOLOR=0
-	FILTER="grep -v -E '^(%optflag|%__isa)'"
+	FILTER="grep -v -E ^(%optflag|%__isa)"
 	;;
   esac
 
@@ -134,3 +147,6 @@ for ARCH in noarch `grep ^arch_canon $RPMRC | cut -d: -f2`; do
   > ${PPD}/macros
 
 done
+
+# gently adjust autoconf variables to rpm macros...
+cat $MACROS | sed -e '/\${\w*:-/!s,\${,%{_,' > ${DESTDIR}/${pkglibdir}/macros

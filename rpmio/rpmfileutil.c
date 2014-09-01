@@ -13,10 +13,6 @@
 
 #endif
 
-#if defined(HAVE_MMAP)
-#include <sys/mman.h>
-#endif
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -35,6 +31,47 @@
 #include "debug.h"
 
 static const char *rpm_config_dir = NULL;
+
+static int is_prelinked(int fdno)
+{
+    int prelinked = 0;
+#if HAVE_GELF_H && HAVE_LIBELF
+    Elf *elf = NULL;
+    Elf_Scn *scn = NULL;
+    Elf_Data *data = NULL;
+    GElf_Ehdr ehdr;
+    GElf_Shdr shdr;
+    GElf_Dyn dyn;
+
+    (void) elf_version(EV_CURRENT);
+
+    if ((elf = elf_begin (fdno, ELF_C_READ, NULL)) == NULL ||
+	       elf_kind(elf) != ELF_K_ELF || gelf_getehdr(elf, &ehdr) == NULL ||
+	       !(ehdr.e_type == ET_DYN || ehdr.e_type == ET_EXEC))
+	goto exit;
+
+    while (!prelinked && (scn = elf_nextscn(elf, scn)) != NULL) {
+	(void) gelf_getshdr(scn, &shdr);
+	if (shdr.sh_type != SHT_DYNAMIC)
+	    continue;
+	while (!prelinked && (data = elf_getdata (scn, data)) != NULL) {
+	    int maxndx = data->d_size / shdr.sh_entsize;
+
+            for (int ndx = 0; ndx < maxndx; ++ndx) {
+		(void) gelf_getdyn (data, ndx, &dyn);
+		if (!(dyn.d_tag == DT_GNU_PRELINKED || dyn.d_tag == DT_GNU_LIBLIST))
+		    continue;
+		prelinked = 1;
+		break;
+	    }
+	}
+    }
+
+exit:
+    if (elf) (void) elf_end(elf);
+#endif
+    return prelinked;
+}
 
 static int open_dso(const char * path, pid_t * pidp, rpm_loff_t *fsizep)
 {
@@ -63,73 +100,42 @@ static int open_dso(const char * path, pid_t * pidp, rpm_loff_t *fsizep)
     if (!(cmd && *cmd))
 	return fdno;
 
-#if HAVE_GELF_H && HAVE_LIBELF
- {  Elf *elf = NULL;
-    Elf_Scn *scn = NULL;
-    Elf_Data *data = NULL;
-    GElf_Ehdr ehdr;
-    GElf_Shdr shdr;
-    GElf_Dyn dyn;
-    int bingo;
-
-    (void) elf_version(EV_CURRENT);
-
-    if ((elf = elf_begin (fdno, ELF_C_READ, NULL)) == NULL
-     || elf_kind(elf) != ELF_K_ELF
-     || gelf_getehdr(elf, &ehdr) == NULL
-     || !(ehdr.e_type == ET_DYN || ehdr.e_type == ET_EXEC))
-	goto exit;
-
-    bingo = 0;
-    while (!bingo && (scn = elf_nextscn(elf, scn)) != NULL) {
-	(void) gelf_getshdr(scn, &shdr);
-	if (shdr.sh_type != SHT_DYNAMIC)
-	    continue;
-	while (!bingo && (data = elf_getdata (scn, data)) != NULL) {
-	    int maxndx = data->d_size / shdr.sh_entsize;
-	    int ndx;
-
-            for (ndx = 0; ndx < maxndx; ++ndx) {
-		(void) gelf_getdyn (data, ndx, &dyn);
-		if (!(dyn.d_tag == DT_GNU_PRELINKED || dyn.d_tag == DT_GNU_LIBLIST))
-		    continue;
-		bingo = 1;
-		break;
-	    }
-	}
-    }
-
-    if (pidp != NULL && bingo) {
+    if (pidp != NULL && is_prelinked(fdno)) {
 	int pipes[2];
 	pid_t pid;
-	int xx;
 
-	xx = close(fdno);
+	close(fdno);
 	pipes[0] = pipes[1] = -1;
-	xx = pipe(pipes);
-	if (!(pid = fork())) {
+	if (pipe(pipes) < 0)
+	    return -1;
+
+	pid = fork();
+	if (pid < 0) {
+	    close(pipes[0]);
+	    close(pipes[1]);
+	    return -1;
+	}
+
+	if (pid == 0) {
 	    ARGV_t av, lib;
+	    int dfd;
 	    argvSplit(&av, cmd, " ");
 
-	    xx = close(pipes[0]);
-	    xx = dup2(pipes[1], STDOUT_FILENO);
-	    xx = close(pipes[1]);
-	    if ((lib = argvSearch(av, "library", NULL)) != NULL) {
+	    close(pipes[0]);
+	    dfd = dup2(pipes[1], STDOUT_FILENO);
+	    close(pipes[1]);
+	    if (dfd >= 0 && (lib = argvSearch(av, "library", NULL)) != NULL) {
 		*lib = (char *) path;
 		unsetenv("MALLOC_CHECK_");
-		xx = execve(av[0], av+1, environ);
+		execve(av[0], av+1, environ);
 	    }
-	    _exit(127);
+	    _exit(127); /* not normally reached */
+	} else {
+	    *pidp = pid;
+	    fdno = pipes[0];
+	    close(pipes[1]);
 	}
-	*pidp = pid;
-	fdno = pipes[0];
-	xx = close(pipes[1]);
     }
-
-exit:
-    if (elf) (void) elf_end(elf);
- }
-#endif
 
     return fdno;
 }
@@ -154,43 +160,9 @@ int rpmDoDigest(int algo, const char * fn,int asAscii,
 	goto exit;
     }
 
-    /* file to large (32 MB), do not mmap file */
-    if (fsize > (size_t) 32*1024*1024)
-      if (ut == URL_IS_PATH || ut == URL_IS_UNKNOWN)
-	ut = URL_IS_DASH; /* force fd io */
-
     switch(ut) {
     case URL_IS_PATH:
     case URL_IS_UNKNOWN:
-#ifdef HAVE_MMAP
-      if (pid == 0) {
-	int xx;
-	DIGEST_CTX ctx;
-	void * mapped;
-
-	if (fsize) {
-	    mapped = mmap(NULL, fsize, PROT_READ, MAP_SHARED, fdno, 0);
-	    if (mapped == MAP_FAILED) {
-		xx = close(fdno);
-		rc = 1;
-		break;
-	    }
-
-#ifdef	MADV_SEQUENTIAL
-	    xx = madvise(mapped, fsize, MADV_SEQUENTIAL);
-#endif
-	}
-
-	ctx = rpmDigestInit(algo, RPMDIGEST_NONE);
-	if (fsize)
-	    xx = rpmDigestUpdate(ctx, mapped, fsize);
-	xx = rpmDigestFinal(ctx, (void **)&dig, &diglen, asAscii);
-	if (fsize)
-	    xx = munmap(mapped, fsize);
-	xx = close(fdno);
-	break;
-      }
-#endif
     case URL_IS_HTTPS:
     case URL_IS_HTTP:
     case URL_IS_FTP:
@@ -212,7 +184,7 @@ int rpmDoDigest(int algo, const char * fn,int asAscii,
 	while ((rc = Fread(buf, sizeof(buf[0]), sizeof(buf), fd)) > 0)
 	    fsize += rc;
 	fdFiniDigest(fd, algo, (void **)&dig, &diglen, asAscii);
-	if (Ferror(fd))
+	if (dig == NULL || Ferror(fd))
 	    rc = 1;
 
 	(void) Fclose(fd);
@@ -566,146 +538,6 @@ char * rpmGetPath(const char *path, ...)
     free(dest);
 
     return rpmCleanPath(res);
-}
-
-int rpmGlob(const char * patterns, int * argcPtr, ARGV_t * argvPtr)
-{
-    int ac = 0;
-    const char ** av = NULL;
-    int argc = 0;
-    ARGV_t argv = NULL;
-    char * globRoot = NULL;
-    const char *home = getenv("HOME");
-    int gflags = 0;
-#ifdef ENABLE_NLS
-    char * old_collate = NULL;
-    char * old_ctype = NULL;
-    const char * t;
-#endif
-    size_t maxb, nb;
-    int i, j;
-    int rc;
-
-    if (home != NULL && strlen(home) > 0) 
-	gflags |= GLOB_TILDE;
-
-    /* Can't use argvSplit() here, it doesn't handle whitespace etc escapes */
-    rc = poptParseArgvString(patterns, &ac, &av);
-    if (rc)
-	return rc;
-
-#ifdef ENABLE_NLS
-    t = setlocale(LC_COLLATE, NULL);
-    if (t)
-    	old_collate = xstrdup(t);
-    t = setlocale(LC_CTYPE, NULL);
-    if (t)
-    	old_ctype = xstrdup(t);
-    (void) setlocale(LC_COLLATE, "C");
-    (void) setlocale(LC_CTYPE, "C");
-#endif
-	
-    if (av != NULL)
-    for (j = 0; j < ac; j++) {
-	char * globURL;
-	const char * path;
-	int ut = urlPath(av[j], &path);
-	int local = (ut == URL_IS_PATH) || (ut == URL_IS_UNKNOWN);
-	size_t plen = strlen(path);
-	int flags = gflags;
-	int dir_only = (plen > 0 && path[plen-1] == '/');
-	glob_t gl;
-
-	if (!local || (!glob_pattern_p(av[j], 0) && strchr(path, '~') == NULL)) {
-	    argvAdd(&argv, av[j]);
-	    continue;
-	}
-
-#ifdef GLOB_ONLYDIR
-	if (dir_only)
-	    flags |= GLOB_ONLYDIR;
-#endif
-	
-	gl.gl_pathc = 0;
-	gl.gl_pathv = NULL;
-	
-	rc = glob(av[j], flags, NULL, &gl);
-	if (rc)
-	    goto exit;
-
-	/* XXX Prepend the URL leader for globs that have stripped it off */
-	maxb = 0;
-	for (i = 0; i < gl.gl_pathc; i++) {
-	    if ((nb = strlen(&(gl.gl_pathv[i][0]))) > maxb)
-		maxb = nb;
-	}
-	
-	nb = ((ut == URL_IS_PATH) ? (path - av[j]) : 0);
-	maxb += nb;
-	maxb += 1;
-	globURL = globRoot = xmalloc(maxb);
-
-	switch (ut) {
-	case URL_IS_PATH:
-	case URL_IS_DASH:
-	    strncpy(globRoot, av[j], nb);
-	    break;
-	case URL_IS_HTTPS:
-	case URL_IS_HTTP:
-	case URL_IS_FTP:
-	case URL_IS_HKP:
-	case URL_IS_UNKNOWN:
-	default:
-	    break;
-	}
-	globRoot += nb;
-	*globRoot = '\0';
-
-	for (i = 0; i < gl.gl_pathc; i++) {
-	    const char * globFile = &(gl.gl_pathv[i][0]);
-
-	    if (dir_only) {
-		struct stat sb;
-		if (lstat(gl.gl_pathv[i], &sb) || !S_ISDIR(sb.st_mode))
-		    continue;
-	    }
-		
-	    if (globRoot > globURL && globRoot[-1] == '/')
-		while (*globFile == '/') globFile++;
-	    strcpy(globRoot, globFile);
-	    argvAdd(&argv, globURL);
-	}
-	globfree(&gl);
-	free(globURL);
-    }
-
-    argc = argvCount(argv);
-    if (argc > 0) {
-	if (argvPtr)
-	    *argvPtr = argv;
-	if (argcPtr)
-	    *argcPtr = argc;
-	rc = 0;
-    } else
-	rc = 1;
-
-
-exit:
-#ifdef ENABLE_NLS	
-    if (old_collate) {
-	(void) setlocale(LC_COLLATE, old_collate);
-	free(old_collate);
-    }
-    if (old_ctype) {
-	(void) setlocale(LC_CTYPE, old_ctype);
-	free(old_ctype);
-    }
-#endif
-    av = _free(av);
-    if (rc || argvPtr == NULL) {
-	argvFree(argv);
-    }
-    return rc;
 }
 
 char * rpmEscapeSpaces(const char * s)

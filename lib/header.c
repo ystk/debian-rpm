@@ -10,6 +10,7 @@
 
 #include "system.h"
 #include <netdb.h>
+#include <errno.h>
 #include <rpm/rpmtypes.h>
 #include <rpm/rpmstring.h>
 #include "lib/header_internal.h"
@@ -67,8 +68,13 @@ static const int typeSizes[16] =  {
     0
 };
 
+enum headerSorted_e {
+    HEADERSORT_NONE	= 0,	/* Not sorted */
+    HEADERSORT_OFFSET	= 1,	/* Sorted by offset (on-disk format) */
+    HEADERSORT_INDEX	= 2,	/* Sorted by index  */
+};
+
 enum headerFlags_e {
-    HEADERFLAG_SORTED    = (1 << 0), /*!< Are header entries sorted? */
     HEADERFLAG_ALLOCATED = (1 << 1), /*!< Is 1st header region allocated? */
     HEADERFLAG_LEGACY    = (1 << 2), /*!< Header came from legacy source? */
     HEADERFLAG_DEBUG     = (1 << 3), /*!< Debug this header? */
@@ -86,6 +92,7 @@ struct headerToken_s {
     int indexAlloced;		/*!< Allocated size of tag array. */
     unsigned int instance;	/*!< Rpmdb instance (offset) */
     headerFlags flags;
+    int sorted;			/*!< Current sort method */
     int nrefs;			/*!< Reference count. */
 };
 
@@ -104,10 +111,12 @@ static const size_t headerMaxbytes = (32*1024*1024);
 RPM_GNUC_CONST
 static uint64_t htonll(uint64_t n)
 {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     uint32_t *i = (uint32_t*)&n;
     uint32_t b = i[0];
     i[0] = htonl(i[1]);
     i[1] = htonl(b);
+#endif
     return n;
 }
 
@@ -166,7 +175,7 @@ static Header headerCreate(void *blob, unsigned int pvlen, int32_t indexLen)
 	h->indexUsed = 0;
     }
     h->instance = 0;
-    h->flags |= HEADERFLAG_SORTED;
+    h->sorted = HEADERSORT_NONE;
 
     h->index = (h->indexAlloced
 	? xcalloc(h->indexAlloced, sizeof(*h->index))
@@ -216,9 +225,9 @@ static int indexCmp(const void * avp, const void * bvp)
 
 void headerSort(Header h)
 {
-    if (!(h->flags & HEADERFLAG_SORTED)) {
+    if (h->sorted != HEADERSORT_INDEX) {
 	qsort(h->index, h->indexUsed, sizeof(*h->index), indexCmp);
-	h->flags |= HEADERFLAG_SORTED;
+	h->sorted = HEADERSORT_INDEX;
     }
 }
 
@@ -239,9 +248,9 @@ static int offsetCmp(const void * avp, const void * bvp)
 
 void headerUnsort(Header h)
 {
-    if (h->flags & HEADERFLAG_SORTED) {
+    if (h->sorted != HEADERSORT_OFFSET) {
 	qsort(h->index, h->indexUsed, sizeof(*h->index), offsetCmp);
-	h->flags &= ~HEADERFLAG_SORTED;
+	h->sorted = HEADERSORT_OFFSET;
     }
 }
 
@@ -718,7 +727,8 @@ indexEntry findEntry(Header h, rpmTagVal tag, rpm_tagtype_t type)
     struct indexEntry_s key;
 
     if (h == NULL) return NULL;
-    if (!(h->flags & HEADERFLAG_SORTED)) headerSort(h);
+    if (h->sorted != HEADERSORT_INDEX)
+	headerSort(h);
 
     key.info.tag = tag;
 
@@ -748,7 +758,7 @@ int headerDel(Header h, rpmTagVal tag)
     entry = findEntry(h, tag, RPM_NULL_TYPE);
     if (!entry) return 1;
 
-    /* Make sure entry points to the first occurence of this tag. */
+    /* Make sure entry points to the first occurrence of this tag. */
     while (entry > h->index && (entry - 1)->info.tag == tag)  
 	entry--;
 
@@ -904,7 +914,8 @@ Header headerImport(void * blob, unsigned int bsize, headerImportFlags flags)
 	    goto errxit;
     }
 
-    h->flags &= ~HEADERFLAG_SORTED;
+    /* Force sorting, dribble lookups can cause early sort on partial header */
+    h->sorted = HEADERSORT_NONE;
     headerSort(h);
     h->flags |= HEADERFLAG_ALLOCATED;
 
@@ -964,7 +975,7 @@ Header headerRead(FD_t fd, int magicp)
     if (magicp == HEADER_MAGIC_YES) {
 	int32_t magic;
 
-	if (Fread(block, 1, 4*sizeof(*block), fd) != 4*sizeof(*block))
+	if (Freadall(fd, block, 4*sizeof(*block)) != 4*sizeof(*block))
 	    goto exit;
 
 	magic = block[0];
@@ -975,7 +986,7 @@ Header headerRead(FD_t fd, int magicp)
 	il = ntohl(block[2]);
 	dl = ntohl(block[3]);
     } else {
-	if (Fread(block, 1, 2*sizeof(*block), fd) != 2*sizeof(*block))
+	if (Freadall(fd, block, 2*sizeof(*block)) != 2*sizeof(*block))
 	    goto exit;
 
 	il = ntohl(block[0]);
@@ -993,7 +1004,7 @@ Header headerRead(FD_t fd, int magicp)
     ei[0] = htonl(il);
     ei[1] = htonl(dl);
 
-    if (Fread((char *)&ei[2], 1, blen, fd) != blen)
+    if (Freadall(fd, (char *)&ei[2], blen) != blen)
 	goto exit;
     
     h = headerImport(ei, len, 0);
@@ -1405,7 +1416,7 @@ static int intAddEntry(Header h, rpmtd td)
 {
     indexEntry entry;
     rpm_data_t data;
-    int length;
+    int length = 0;
 
     /* Count must always be >= 1 for headerAddEntry. */
     if (td->count <= 0)
@@ -1416,9 +1427,8 @@ static int intAddEntry(Header h, rpmtd td)
     if (hdrchkData(td->count))
 	return 0;
 
-    length = 0;
     data = grabData(td->type, td->data, td->count, &length);
-    if (data == NULL || length <= 0)
+    if (data == NULL)
 	return 0;
 
     /* Allocate more index space if necessary */
@@ -1437,7 +1447,7 @@ static int intAddEntry(Header h, rpmtd td)
     entry->length = length;
 
     if (h->indexUsed > 0 && td->tag < h->index[h->indexUsed-1].info.tag)
-	h->flags &= ~HEADERFLAG_SORTED;
+	h->sorted = HEADERSORT_NONE;
     h->indexUsed++;
 
     return 1;
@@ -1638,19 +1648,18 @@ int headerMod(Header h, rpmtd td)
     indexEntry entry;
     rpm_data_t oldData;
     rpm_data_t data;
-    int length;
+    int length = 0;
 
     /* First find the tag */
     entry = findEntry(h, td->tag, td->type);
     if (!entry)
 	return 0;
 
-    length = 0;
     data = grabData(td->type, td->data, td->count, &length);
-    if (data == NULL || length <= 0)
+    if (data == NULL)
 	return 0;
 
-    /* make sure entry points to the first occurence of this tag */
+    /* make sure entry points to the first occurrence of this tag */
     while (entry > h->index && (entry - 1)->info.tag == td->tag)  
 	entry--;
 
@@ -1746,4 +1755,30 @@ void headerSetInstance(Header h, unsigned int instance)
 {
     h->instance = instance;
 }    
+
+#define RETRY_ERROR(_err) \
+    ((_err) == EINTR || (_err) == EAGAIN || (_err) == EWOULDBLOCK)
+
+ssize_t Freadall(FD_t fd, void * buf, ssize_t size)
+{
+    ssize_t total = 0;
+    ssize_t nb = 0;
+    char * bufp = buf;
+
+    while (total < size) {
+	nb = Fread(bufp, 1, size - total, fd);
+
+	if (nb == 0 || (nb < 0 && !RETRY_ERROR(errno))) {
+	    total = nb;
+	    break;
+	}
+
+	if (nb > 0) {
+	    bufp += nb;
+	    total += nb;
+	}
+    }
+
+    return total;
+}
 

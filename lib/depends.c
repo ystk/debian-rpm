@@ -13,6 +13,7 @@
 
 #include "lib/rpmts_internal.h"
 #include "lib/rpmte_internal.h"
+#include "lib/rpmds_internal.h"
 #include "lib/misc.h"
 
 #include "debug.h"
@@ -24,9 +25,6 @@ const char * const rpmNAME = PACKAGE;
 const char * const rpmEVR = VERSION;
 
 const int rpmFLAGS = RPMSENSE_EQUAL;
-
-/* rpmlib provides */
-static rpmds rpmlibP = NULL;
 
 #undef HASHTYPE
 #undef HTKEYTYPE
@@ -41,11 +39,20 @@ static rpmds rpmlibP = NULL;
 #undef HTKEYTYPE
 #undef HTDATATYPE
 
-#define HASHTYPE intHash
+#define HASHTYPE removedHash
 #define HTKEYTYPE unsigned int
+#define HTDATATYPE struct rpmte_s *
 #include "rpmhash.C"
 #undef HASHTYPE
-#undef HASHKEYTYPE
+#undef HTKEYTYPE
+#undef HTDATATYPE
+
+#define HASHTYPE conflictsCache
+#define HTKEYTYPE const char *
+#include "rpmhash.H"
+#include "rpmhash.C"
+#undef HASHTYPE
+#undef HTKEYTYPE
 
 /**
  * Check for supported payload format in header.
@@ -95,7 +102,7 @@ static int removePackage(rpmts ts, Header h, rpmte depends)
     if (dboffset == 0) return 1;
 
     /* Filter out duplicate erasures. */
-    if (intHashHasEntry(tsmem->removedPackages, dboffset)) {
+    if (removedHashHasEntry(tsmem->removedPackages, dboffset)) {
         return 0;
     }
 
@@ -103,7 +110,7 @@ static int removePackage(rpmts ts, Header h, rpmte depends)
     if (p == NULL)
 	return 1;
 
-    intHashAddEntry(tsmem->removedPackages, dboffset);
+    removedHashAddEntry(tsmem->removedPackages, dboffset, p);
 
     if (tsmem->orderCount >= tsmem->orderAlloced) {
 	tsmem->orderAlloced += (tsmem->orderCount - tsmem->orderAlloced) + tsmem->delta;
@@ -173,6 +180,7 @@ static int addUpgradeErasures(rpmts ts, rpm_color_t tscolor,
 /* Add erase elements for obsoleted packages of same color (if any). */
 static int addObsoleteErasures(rpmts ts, rpm_color_t tscolor, rpmte p)
 {
+    rpmstrPool tspool = rpmtsPool(ts);
     rpmds obsoletes = rpmdsInit(rpmteDS(p, RPMTAG_OBSOLETENAME));
     Header oh;
     int rc = 0;
@@ -188,6 +196,7 @@ static int addObsoleteErasures(rpmts ts, rpm_color_t tscolor, rpmte p)
 
 	while((oh = rpmdbNextIterator(mi)) != NULL) {
 	    const char *oarch = headerGetString(oh, RPMTAG_ARCH);
+	    int match;
 
 	    /* avoid self-obsoleting packages */
 	    if (rstreq(rpmteN(p), Name) && rstreq(rpmteA(p), oarch)) {
@@ -201,8 +210,12 @@ static int addObsoleteErasures(rpmts ts, rpm_color_t tscolor, rpmte p)
 	     * Rpm prior to 3.0.3 does not have versioned obsoletes.
 	     * If no obsoletes version info is available, match all names.
 	     */
-	    if (rpmdsEVR(obsoletes) == NULL
-		|| rpmdsNVRMatchesDep(oh, obsoletes, _rpmds_nopromote)) {
+	    match = (rpmdsEVR(obsoletes) == NULL);
+	    if (!match)
+		match = rpmdsMatches(tspool, oh, -1, obsoletes, 1,
+					 _rpmds_nopromote);
+
+	    if (match) {
 		char * ohNEVRA = headerGetAsString(oh, RPMTAG_NEVRA);
 		rpmlog(RPMLOG_DEBUG, "  Obsoletes: %s\t\terases %s\n",
 			rpmdsDNEVR(obsoletes)+2, ohNEVRA);
@@ -220,97 +233,157 @@ static int addObsoleteErasures(rpmts ts, rpm_color_t tscolor, rpmte p)
 }
 
 /*
+ * Lookup obsoletions in the added set. In theory there could
+ * be more than one obsoleting package, but we only care whether this
+ * has been obsoleted by *something* or not.
+ */
+static rpmte checkObsoleted(rpmal addedPackages, rpmds thisds)
+{
+    rpmte p = NULL;
+    rpmte *matches = NULL;
+
+    matches = rpmalAllObsoletes(addedPackages, thisds);
+    if (matches) {
+	p = matches[0];
+	free(matches);
+    }
+    return p;
+}
+
+/*
+ * Filtered rpmal lookup: on colored transactions there can be more
+ * than one identical NEVR but different arch, this must be allowed.
+ * Only a single element needs to be considred as there can only ever
+ * be one previous element to be replaced.
+ */
+static rpmte checkAdded(rpmal addedPackages, rpm_color_t tscolor,
+			rpmte te, rpmds ds)
+{
+    rpmte p = NULL;
+    rpmte *matches = NULL;
+
+    matches = rpmalAllSatisfiesDepend(addedPackages, ds);
+    if (matches) {
+	const char * arch = rpmteA(te);
+	const char * os = rpmteO(te);
+
+	for (rpmte *m = matches; m && *m; m++) {
+	    if (tscolor) {
+		const char * parch = rpmteA(*m);
+		const char * pos = rpmteO(*m);
+
+		if (arch == NULL || parch == NULL || os == NULL || pos == NULL)
+		    continue;
+		if (!rstreq(arch, parch) || !rstreq(os, pos))
+		    continue;
+	    }
+	    p = *m;
+	    break;
+  	}
+	free(matches);
+    }
+    return p;
+}
+
+/*
  * Check for previously added versions and obsoletions.
  * Return index where to place this element, or -1 to skip.
+ * XXX OBSOLETENAME is a bit of a hack, but gives us what
+ * we want from rpmal: we're only interested in added package
+ * names here, not their provides.
  */
-static int findPos(rpmts ts, rpm_color_t tscolor, Header h, int upgrade)
+static int findPos(rpmts ts, rpm_color_t tscolor, rpmte te, int upgrade)
 {
-    int oc;
-    int obsolete = 0;
-    const char * arch = headerGetString(h, RPMTAG_ARCH);
-    const char * os = headerGetString(h, RPMTAG_OS);
+    tsMembers tsmem = rpmtsMembers(ts);
+    int oc = tsmem->orderCount;
+    int skip = 0;
+    const char * name = rpmteN(te);
+    const char * evr = rpmteEVR(te);
     rpmte p;
-    rpmds oldChk = rpmdsThis(h, RPMTAG_REQUIRENAME, (RPMSENSE_LESS));
-    rpmds newChk = rpmdsThis(h, RPMTAG_REQUIRENAME, (RPMSENSE_GREATER));
-    rpmds sameChk = rpmdsThis(h, RPMTAG_REQUIRENAME, (RPMSENSE_EQUAL));
-    rpmds obsChk = rpmdsNew(h, RPMTAG_OBSOLETENAME, 0);
-    rpmtsi pi = rpmtsiInit(ts);
+    rpmstrPool tspool = rpmtsPool(ts);
+    rpmds oldChk = rpmdsSinglePool(tspool, RPMTAG_OBSOLETENAME,
+				   name, evr, (RPMSENSE_LESS));
+    rpmds newChk = rpmdsSinglePool(tspool, RPMTAG_OBSOLETENAME,
+				   name, evr, (RPMSENSE_GREATER));
+    rpmds sameChk = rpmdsSinglePool(tspool, RPMTAG_OBSOLETENAME,
+				    name, evr, (RPMSENSE_EQUAL));
+    rpmds obsChk = rpmteDS(te, RPMTAG_OBSOLETENAME);
 
-    /* XXX can't use rpmtsiNext() filter or oc will have wrong value. */
-    for (oc = 0; (p = rpmtsiNext(pi, 0)) != NULL; oc++) {
-	rpmds thisds, obsoletes;
+    /* If obsoleting package has already been added, skip this. */
+    if ((p = checkObsoleted(tsmem->addedPackages, rpmteDS(te, RPMTAG_NAME)))) {
+	skip = 1;
+	goto exit;
+    }
 
-	/* Only added binary packages need checking */
-	if (rpmteType(p) == TR_REMOVED || rpmteIsSource(p))
-	    continue;
-
-	/* Skip packages obsoleted by already added packages */
-	obsoletes = rpmdsInit(rpmteDS(p, RPMTAG_OBSOLETENAME));
-	while (rpmdsNext(obsoletes) >= 0) {
-	    if (rpmdsCompare(obsoletes, sameChk)) {
-		obsolete = 1;
-		oc = -1;
-		break;
-	    }
-	}
-
-	/* Replace already added obsoleted packages by obsoleting package */
-	thisds = rpmteDS(p, RPMTAG_NAME);
-	rpmdsInit(obsChk);
-	while (rpmdsNext(obsChk) >= 0) {
-	    if (rpmdsCompare(obsChk, thisds)) {
-		obsolete = 1;
-		break;
-	    }
-	}
-
-	if (obsolete)
-	    break;
-
-	if (tscolor) {
-	    const char * parch = rpmteA(p);
-	    const char * pos = rpmteO(p);
-
-	    if (arch == NULL || parch == NULL || os == NULL || pos == NULL)
-		continue;
-	    if (!rstreq(arch, parch) || !rstreq(os, pos))
-		continue;
-	}
-
-	/* 
-	 * Always skip identical NEVR. 
- 	 * On upgrade, if newer NEVR was previously added, skip adding older.
- 	 */
-	if (rpmdsCompare(sameChk, thisds) ||
-		(upgrade && rpmdsCompare(newChk, thisds))) {
-	    oc = -1;
-	    break;;
-	}
-
- 	/* On upgrade, if older NEVR was previously added, replace with new */
-	if (upgrade && rpmdsCompare(oldChk, thisds) != 0) {
-	    break;
+    /* If obsoleted package has already been added, replace with this. */
+    rpmdsInit(obsChk);
+    while (rpmdsNext(obsChk) >= 0) {
+	/* XXX Obsoletes are not colored */
+	if ((p = checkAdded(tsmem->addedPackages, 0, te, obsChk))) {
+	    goto exit;
 	}
     }
 
-    /* If we broke out of the loop early we've something to say */
+    /* If same NEVR has already been added, skip this. */
+    if ((p = checkAdded(tsmem->addedPackages, tscolor, te, sameChk))) {
+	skip = 1;
+	goto exit;
+    }
+
+    /* On upgrades... */
+    if (upgrade) {
+	/* ...if newer NEVR has already been added, skip this. */
+	if ((p = checkAdded(tsmem->addedPackages, tscolor, te, newChk))) {
+	    skip = 1;
+	    goto exit;
+	}
+
+	/* ...if older NEVR has already been added, replace with this. */
+	if ((p = checkAdded(tsmem->addedPackages, tscolor, te, oldChk))) {
+	    goto exit;
+	}
+    }
+
+exit:
+    /* If we found a previous element we've something to say */
     if (p != NULL && rpmIsVerbose()) {
-	char *nevra = headerGetAsString(h, RPMTAG_NEVRA);
-	const char *msg = (oc < 0) ?
+	const char *msg = skip ?
 		    _("package %s was already added, skipping %s\n") :
 		    _("package %s was already added, replacing with %s\n");
-	rpmlog(RPMLOG_WARNING, msg, rpmteNEVRA(p), nevra);
-	free(nevra);
+	rpmlog(RPMLOG_WARNING, msg, rpmteNEVRA(p), rpmteNEVRA(te));
     }
 
-    rpmtsiFree(pi);
+    /* If replacing a previous element, find out where it is. Pooh. */
+    if (!skip && p != NULL) {
+	for (oc = 0; oc < tsmem->orderCount; oc++) {
+	    if (p == tsmem->order[oc])
+		break;
+	}
+    }
+
     rpmdsFree(oldChk);
     rpmdsFree(newChk);
     rpmdsFree(sameChk);
-    rpmdsFree(obsChk);
-    return oc;
+    return (skip) ? -1 : oc;
 }
 
+rpmal rpmtsCreateAl(rpmts ts, rpmElementTypes types)
+{
+    rpmal al = NULL;
+    if (ts) {
+	rpmte p;
+	rpmtsi pi;
+	rpmstrPool tspool = rpmtsPool(ts);
+
+	al = rpmalCreate(tspool, (rpmtsNElements(ts) / 4) + 1, rpmtsFlags(ts),
+				rpmtsColor(ts), rpmtsPrefColor(ts));
+	pi = rpmtsiInit(ts);
+	while ((p = rpmtsiNext(pi, types)))
+	    rpmalAdd(al, p);
+	rpmtsiFree(pi);
+    }
+    return al;
+}
 
 int rpmtsAddInstallElement(rpmts ts, Header h,
 			fnpyKey key, int upgrade, rpmRelocation * relocs)
@@ -346,7 +419,7 @@ int rpmtsAddInstallElement(rpmts ts, Header h,
 
     /* Check binary packages for redundancies in the set */
     if (!isSource) {
-	oc = findPos(ts, tscolor, h, upgrade);
+	oc = findPos(ts, tscolor, p, upgrade);
 	/* If we're replacing a previously added element, free the old one */
 	if (oc >= 0 && oc < tsmem->orderCount) {
 	    rpmalDel(tsmem->addedPackages, tsmem->order[oc]);
@@ -356,11 +429,6 @@ int rpmtsAddInstallElement(rpmts ts, Header h,
 	    p = rpmteFree(p);
 	    goto exit;
 	}
-    }
-
-    if (tsmem->addedPackages == NULL) {
-	tsmem->addedPackages = rpmalCreate(5, rpmtsFlags(ts),
-					   tscolor, rpmtsPrefColor(ts));
     }
 
     if (oc >= tsmem->orderAlloced) {
@@ -375,6 +443,10 @@ int rpmtsAddInstallElement(rpmts ts, Header h,
 	tsmem->orderCount++;
     }
     
+    if (tsmem->addedPackages == NULL) {
+	tsmem->addedPackages = rpmalCreate(rpmtsPool(ts), 5, rpmtsFlags(ts),
+					   tscolor, rpmtsPrefColor(ts));
+    }
     rpmalAdd(tsmem->addedPackages, p);
 
     /* Add erasure elements for old versions and obsoletions on upgrades */
@@ -405,12 +477,16 @@ static int rpmdbProvides(rpmts ts, depCache dcache, rpmds dep)
     int rc = 0;
     /* pretrans deps are provided by current packages, don't prune erasures */
     int prune = (rpmdsFlags(dep) & RPMSENSE_PRETRANS) ? 0 : 1;
+    unsigned int keyhash = 0;
 
     /* See if we already looked this up */
-    if (prune && depCacheGetEntry(dcache, DNEVR, &cachedrc, NULL, NULL)) {
-	rc = *cachedrc;
-	rpmdsNotify(dep, "(cached)", rc);
-	return rc;
+    if (prune) {
+	keyhash = depCacheKeyHash(dcache, DNEVR);
+	if (depCacheGetHEntry(dcache, DNEVR, keyhash, &cachedrc, NULL, NULL)) {
+	    rc = *cachedrc;
+	    rpmdsNotify(dep, "(cached)", rc);
+	    return rc;
+	}
     }
 
     /*
@@ -421,6 +497,12 @@ static int rpmdbProvides(rpmts ts, depCache dcache, rpmds dep)
     if (deptag != RPMTAG_OBSOLETENAME && Name[0] == '/') {
 	mi = rpmtsPrunedIterator(ts, RPMDBI_INSTFILENAMES, Name, prune);
 	while ((h = rpmdbNextIterator(mi)) != NULL) {
+	    /* Ignore self-conflicts */
+	    if (deptag == RPMTAG_CONFLICTNAME) {
+		unsigned int instance = headerGetInstance(h);
+		if (instance && instance == rpmdsInstance(dep))
+		    continue;
+	    }
 	    rpmdsNotify(dep, "(db files)", rc);
 	    break;
 	}
@@ -429,19 +511,26 @@ static int rpmdbProvides(rpmts ts, depCache dcache, rpmds dep)
 
     /* Otherwise look in provides no matter what the dependency looks like */
     if (h == NULL) {
+	rpmstrPool tspool = rpmtsPool(ts);
 	/* Obsoletes use just name alone, everything else uses provides */
 	rpmTagVal dbtag = RPMDBI_PROVIDENAME;
-	if (deptag == RPMDBI_OBSOLETENAME)
+	int selfevr = 0;
+	if (deptag == RPMTAG_OBSOLETENAME) {
 	    dbtag = RPMDBI_NAME;
+	    selfevr = 1;
+	}
 
 	mi = rpmtsPrunedIterator(ts, dbtag, Name, prune);
 	while ((h = rpmdbNextIterator(mi)) != NULL) {
-	    int match;
-	    if (dbtag == RPMDBI_OBSOLETENAME) {
-		match = rpmdsNVRMatchesDep(h, dep, _rpmds_nopromote);
-	    } else {
-		match = rpmdsMatchesDep(h, rpmdbGetIteratorFileNum(mi), dep,
+	    /* Provide-indexes can't be used with nevr-only matching */
+	    int prix = (selfevr) ? -1 : rpmdbGetIteratorFileNum(mi);
+	    int match = rpmdsMatches(tspool, h, prix, dep, selfevr,
 					_rpmds_nopromote);
+	    /* Ignore self-obsoletes and self-conflicts */
+	    if (match && (deptag == RPMTAG_OBSOLETENAME || deptag == RPMTAG_CONFLICTNAME)) {
+		unsigned int instance = headerGetInstance(h);
+		if (instance && instance == rpmdsInstance(dep))
+		    match = 0;
 	    }
 	    if (match) {
 		rpmdsNotify(dep, "(db provides)", rc);
@@ -455,7 +544,7 @@ static int rpmdbProvides(rpmts ts, depCache dcache, rpmds dep)
     /* Cache the relatively expensive rpmdb lookup results */
     /* Caching the oddball non-pruned case would mess up other results */
     if (prune)
-	depCacheAddEntry(dcache, xstrdup(DNEVR), rc);
+	depCacheAddHEntry(dcache, xstrdup(DNEVR), keyhash, rc);
     return rc;
 }
 
@@ -482,11 +571,10 @@ retry:
      * Check those dependencies now.
      */
     if (dsflags & RPMSENSE_RPMLIB) {
-	static int oneshot = -1;
-	if (oneshot) 
-	    oneshot = rpmdsRpmlib(&rpmlibP, NULL);
+	if (tsmem->rpmlib == NULL)
+	    rpmdsRpmlibPool(rpmtsPool(ts), &(tsmem->rpmlib), NULL);
 	
-	if (rpmlibP != NULL && rpmdsSearch(rpmlibP, dep) >= 0) {
+	if (tsmem->rpmlib != NULL && rpmdsSearch(tsmem->rpmlib, dep) >= 0) {
 	    rpmdsNotify(dep, "(rpmlib provides)", rc);
 	    goto exit;
 	}
@@ -499,23 +587,31 @@ retry:
 
     /* Pretrans dependencies can't be satisfied by added packages. */
     if (!(dsflags & RPMSENSE_PRETRANS)) {
-	rpmte match = rpmalSatisfiesDepend(tsmem->addedPackages, dep);
+	rpmte *matches = rpmalAllSatisfiesDepend(tsmem->addedPackages, dep);
+	int match = 0;
 
 	/*
 	 * Handle definitive matches within the added package set.
 	 * Self-obsoletes and -conflicts fall through here as we need to 
 	 * check for possible other matches in the rpmdb.
 	 */
-	if (match) {
+	for (rpmte *m = matches; m && *m; m++) {
 	    rpmTagVal dtag = rpmdsTagN(dep);
 	    /* Requires match, look no further */
-	    if (dtag == RPMTAG_REQUIRENAME)
-		goto exit;
+	    if (dtag == RPMTAG_REQUIRENAME) {
+		match = 1;
+		break;
+	    }
 
 	    /* Conflicts/obsoletes match on another package, look no further */
-	    if (rpmteDS(match, dtag) != dep)
-		goto exit;
+	    if (rpmteDS(*m, dtag) != dep) {
+		match = 1;
+		break;
+	    }
 	}
+	free(matches);
+	if (match)
+	    goto exit;
     }
 
     /* See if the rpmdb provides it */
@@ -534,8 +630,14 @@ retry:
     }
 
 unsatisfied:
-    rc = 1;	/* dependency is unsatisfied */
-    rpmdsNotify(dep, NULL, rc);
+    if (dsflags & RPMSENSE_MISSINGOK) {
+	/* note the result, but missingok deps are never unsatisfied */
+	rpmdsNotify(dep, "(missingok)", 1);
+    } else {
+	/* dependency is unsatisfied */
+	rc = 1;
+	rpmdsNotify(dep, NULL, rc);
+    }
 
 exit:
     return rc;
@@ -572,10 +674,21 @@ static void checkInstDeps(rpmts ts, depCache dcache, rpmte te,
 {
     Header h;
     rpmdbMatchIterator mi = rpmtsPrunedIterator(ts, depTag, dep, 1);
+    rpmstrPool pool = rpmtsPool(ts);
 
     while ((h = rpmdbNextIterator(mi)) != NULL) {
-	char * pkgNEVRA = headerGetAsString(h, RPMTAG_NEVRA);
-	rpmds ds = rpmdsNew(h, depTag, 0);
+	char * pkgNEVRA;
+	rpmds ds;
+
+	/* Ignore self-obsoletes and self-conflicts */
+	if (depTag == RPMTAG_OBSOLETENAME || depTag == RPMTAG_CONFLICTNAME) {
+	    unsigned int instance = headerGetInstance(h);
+	    if (instance && instance == rpmteDBInstance(te))
+		continue;
+	}
+
+	pkgNEVRA = headerGetAsString(h, RPMTAG_NEVRA);
+	ds = rpmdsNewPool(pool, h, depTag, 0);
 
 	checkDS(ts, dcache, te, pkgNEVRA, ds, dep, 0);
 
@@ -592,6 +705,7 @@ int rpmtsCheck(rpmts ts)
     int closeatexit = 0;
     int rc = 0;
     depCache dcache = NULL;
+    conflictsCache confcache = NULL;
     
     (void) rpmswEnter(rpmtsOp(ts, RPMTS_OP_CHECK), 0);
 
@@ -606,6 +720,27 @@ int rpmtsCheck(rpmts ts)
     dcache = depCacheCreate(5001, rstrhash, strcmp,
 				     (depCacheFreeKey)rfree, NULL);
 
+    confcache = conflictsCacheCreate(257, rstrhash, strcmp,
+				     (depCacheFreeKey)rfree);
+    if (confcache) {
+	rpmdbIndexIterator ii = rpmdbIndexIteratorInit(rpmtsGetRdb(ts), RPMTAG_CONFLICTNAME);
+	if (ii) {
+	    char *key;
+	    size_t keylen;
+	    while ((rpmdbIndexIteratorNext(ii, (const void**)&key, &keylen)) == 0) {
+		char *k;
+		if (!key || keylen == 0 || key[0] != '/')
+		    continue;
+		k = rmalloc(keylen + 1);
+		memcpy(k, key, keylen);
+		k[keylen] = 0;
+		conflictsCacheAddEntry(confcache, k);
+	    }
+	    rpmdbIndexIteratorFree(ii);
+	}
+    }
+
+    
     /*
      * Look at all of the added packages and make sure their dependencies
      * are satisfied.
@@ -635,6 +770,17 @@ int rpmtsCheck(rpmts ts)
 
 	/* Check package name (not provides!) against installed obsoletes */
 	checkInstDeps(ts, dcache, p, RPMTAG_OBSOLETENAME, rpmteN(p));
+
+	/* Check filenames against installed conflicts */
+        if (conflictsCacheNumKeys(confcache)) {
+	    rpmfi fi = rpmfiInit(rpmteFI(p), 0);
+	    while (rpmfiNext(fi) >= 0) {
+		const char *fn = rpmfiFN(fi);
+		if (!conflictsCacheHasEntry(confcache, fn))
+		    continue;
+		checkInstDeps(ts, dcache, p, RPMTAG_CONFLICTNAME, fn);
+	    }
+	}
     }
     rpmtsiFree(pi);
 
@@ -663,6 +809,7 @@ int rpmtsCheck(rpmts ts)
 
 exit:
     depCacheFree(dcache);
+    conflictsCacheFree(confcache);
 
     (void) rpmswExit(rpmtsOp(ts, RPMTS_OP_CHECK), 0);
 

@@ -292,8 +292,7 @@ int parseScript(rpmSpec spec, int parsePart)
 	if (rpmluaCheckScript(lua, p, partname) != RPMRC_OK) {
 	    goto exit;
 	}
-	(void) rpmlibNeedsFeature(pkg->header,
-				  "BuiltinLuaScripts", "4.2.2-1");
+	(void) rpmlibNeedsFeature(pkg, "BuiltinLuaScripts", "4.2.2-1");
     } else
 #endif
     if (progArgv[0][0] == '<') {
@@ -302,12 +301,12 @@ int parseScript(rpmSpec spec, int parsePart)
 		 spec->lineNum, progArgv[0]);
 	goto exit;
     } else {
-        (void) addReqProv(pkg->header, RPMTAG_REQUIRENAME,
+        (void) addReqProv(pkg, RPMTAG_REQUIRENAME,
 		progArgv[0], NULL, (tagflags | RPMSENSE_INTERP), 0);
     }
 
     if (scriptFlags) {
-	rpmlibNeedsFeature(pkg->header, "ScriptletExpansion", "4.9.0-1");
+	rpmlibNeedsFeature(pkg, "ScriptletExpansion", "4.9.0-1");
     }
 
     /* Trigger script insertion is always delayed in order to */
@@ -339,7 +338,7 @@ int parseScript(rpmSpec spec, int parsePart)
 	    td.data = (void *) *progArgv;
 	    td.type = RPM_STRING_TYPE;
 	} else {
-	    (void) rpmlibNeedsFeature(pkg->header,
+	    (void) rpmlibNeedsFeature(pkg,
 			"ScriptletInterpreterArgs", "4.0.3-1");
 	    td.data = progArgv;
 	    td.type = RPM_STRING_ARRAY_TYPE;

@@ -3,14 +3,8 @@
 
 #include <rpm/header.h>
 #include <rpm/rpmfi.h>
+#include <rpm/rpmstrpool.h>
 #include "lib/fprint.h"
-
-/* 
- * This limits maximum unique strings (user + group names) from packages to 
- * 65535, should be plenty but easy to bump if ever needed.
- */
-typedef uint16_t scidx_t;
-typedef struct strcache_s *strcache;
 
 #define	RPMFIMAGIC	0x09697923
 
@@ -22,13 +16,12 @@ struct rpmfi_s {
     int j;			/*!< Current directory index. */
 
     Header h;			/*!< Header for file info set (or NULL) */
+    rpmstrPool pool;		/*!< String pool of this file info set */
 
-    const char ** bnl;		/*!< Base name(s) (from header) */
-    const char ** dnl;		/*!< Directory name(s) (from header) */
+    rpmsid * bnid;		/*!< Index to base name(s) (pool) */
+    rpmsid * dnid;		/*!< Index to directory name(s) (pool) */
 
-    strcache flinkcache;	/*!< File link cache */
-    scidx_t * flinks;		/*!< Index to file link(s) cache */
-    scidx_t * flangs;		/*!< Index to file lang(s) cache */
+    rpmsid * flinks;		/*!< Index to file link(s) (pool) */
 
     uint32_t * dil;		/*!< Directory indice(s) (from header) */
     rpm_flag_t * fflags;	/*!< File flag(s) (from header) */
@@ -38,14 +31,14 @@ struct rpmfi_s {
     rpm_rdev_t * frdevs;	/*!< File rdev(s) (from header) */
     rpm_ino_t * finodes;	/*!< File inodes(s) (from header) */
 
-    scidx_t *fuser;		/*!< Index to file owner(s) cache */
-    scidx_t *fgroup;		/*!< Index to file group(s) cache */
+    rpmsid * fuser;		/*!< Index to file owner(s) (misc pool) */
+    rpmsid * fgroup;		/*!< Index to file group(s) (misc pool) */
+    rpmsid * flangs;		/*!< Index to file lang(s) (misc pool) */
 
     char * fstates;		/*!< File state(s) (from header) */
 
     rpm_color_t * fcolors;	/*!< File color bits (header) */
-    strcache fcapcache;		/*!< File capabilities cache */
-    scidx_t * fcaps;		/*!< Index to file cap(s) cache */
+    char ** fcaps;		/*!< File capability strings (header) */
 
     char ** cdict;		/*!< File class dictionary (header) */
     rpm_count_t ncdict;		/*!< No. of class entries. */
@@ -79,8 +72,38 @@ struct rpmfi_s {
 extern "C" {
 #endif
 
+/** \ingroup rpmfi
+ * Return file info set string pool handle
+ * @param fi		file info
+ * @return		string pool handle (weak reference)
+ */
+RPM_GNUC_INTERNAL
+rpmstrPool rpmfiPool(rpmfi fi);
+
+/** \ingroup rpmfi
+ * Return current base name pool id from file info set.
+ * @param fi		file info set
+ * @return		current base name id, 0 on invalid
+ */
+RPM_GNUC_INTERNAL
+rpmsid rpmfiBNId(rpmfi fi);
+
+/** \ingroup rpmfi
+ * Return current directory name pool id from file info set.
+ * @param fi		file info set
+ * @return		current base name id, 0 on invalid
+ */
+RPM_GNUC_INTERNAL
+rpmsid rpmfiDNId(rpmfi fi);
+
 RPM_GNUC_INTERNAL
 int rpmfiDIIndex(rpmfi fi, int dx);
+
+RPM_GNUC_INTERNAL
+rpmsid rpmfiBNIdIndex(rpmfi fi, int ix);
+
+RPM_GNUC_INTERNAL
+rpmsid rpmfiDNIdIndex(rpmfi fi, int jx);
 
 RPM_GNUC_INTERNAL
 const char * rpmfiBNIndex(rpmfi fi, int ix);
@@ -146,7 +169,7 @@ RPM_GNUC_INTERNAL
 const char * rpmfiFCapsIndex(rpmfi fi, int ix);
 
 RPM_GNUC_INTERNAL
-struct fingerPrint_s *rpmfiFpsIndex(rpmfi fi, int ix);
+struct fingerPrint_s *rpmfiFps(rpmfi fi);
 
 RPM_GNUC_INTERNAL
 rpmFileAction rpmfiDecideFateIndex(rpmfi ofi, int oix, rpmfi nfi, int nix,
