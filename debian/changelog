@@ -1,3 +1,25 @@
+rpm (4.8.1-6+squeeze2) squeeze-lts; urgency=medium
+
+  * Non-maintainer upload by the Squeeze LTS team.
+  * CVE-2014-8118: Fix integer overflow which allowed remote attackers to
+    execute arbitrary code.
+  * CVE-2013-6435: Prevent remote attackers from executing arbitrary code via
+    crafted RPM files.
+  * CVE-2012-0815: Fix denial of service and possible code execution via
+    negative value in region offset in crafted RPM files.
+  * CVE-2012-0060 and CVE-2012-0061: Prevent denial of service (crash) and
+    possibly execute arbitrary code execution via an invalid region tag in RPM
+    files.
+
+ -- Holger Levsen <holger@debian.org>  Wed, 28 Jan 2015 17:16:52 +0100
+
+rpm (4.8.1-6+squeeze1) stable; urgency=low
+
+  * Non-maintainer upload by the Security Team
+  * Fix CVE-2011-3378 (Closes: #645325)
+
+ -- Moritz Muehlenhoff <jmm@debian.org>  Thu, 21 Dec 2011 17:59:47 +0000
+
 rpm (4.8.1-6) unstable; urgency=low
 
   * Make librpm-dev conflict/replace librpm4.4 (Closes: #601993).

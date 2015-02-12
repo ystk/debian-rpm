@@ -11,3 +11,9 @@ tempfile.patch
 no-linux-gate.so-dependancy.patch
 autogen-cleanup.patch
 lua-libname.patch
+CVE-2011-3378.patch
+CVE-2014-8118.patch
+CVE-2013-6435.patch
+CVE-2012-0815.patch
+CVE-2012-0060.patch
+CVE-2012-0061.patch
