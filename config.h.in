@@ -247,6 +247,9 @@
 /* canonical vendor */
 #undef RPMCANONVENDOR
 
+/* run-time variable directory */
+#undef RUNDIR
+
 /* Define if struct statfs has the f_bavail member */
 #undef STATFS_HAS_F_BAVAIL
 

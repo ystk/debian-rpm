@@ -1174,7 +1174,7 @@ fi
 # List of tests.
 if $at_list_p; then
   cat <<_ATEOF || at_write_fail=1
-rpm 4.11.2 test suite test groups:
+rpm 4.11.3 test suite test groups:
 
  NUM: FILE-NAME:LINE     TEST-GROUP-NAME
       KEYWORDS
@@ -1215,7 +1215,7 @@ _ATEOF
   exit $at_write_fail
 fi
 if $at_version_p; then
-  $as_echo "$as_me (rpm 4.11.2)" &&
+  $as_echo "$as_me (rpm 4.11.3)" &&
   cat <<\_ATEOF || at_write_fail=1
 
 Copyright (C) 2012 Free Software Foundation, Inc.
@@ -1443,11 +1443,11 @@ exec 5>>"$at_suite_log"
 
 # Banners and logs.
 $as_echo "## ---------------------- ##
-## rpm 4.11.2 test suite. ##
+## rpm 4.11.3 test suite. ##
 ## ---------------------- ##"
 {
   $as_echo "## ---------------------- ##
-## rpm 4.11.2 test suite. ##
+## rpm 4.11.3 test suite. ##
 ## ---------------------- ##"
   echo
 
@@ -2291,7 +2291,7 @@ _ASBOX
   $as_echo "Please send $at_msg and all information you think might help:
 
    To: <rpm-maint@lists.rpm.org>
-   Subject: [rpm 4.11.2] $as_me: $at_fail_list${at_fail_list:+ failed${at_xpass_list:+, }}$at_xpass_list${at_xpass_list:+ passed unexpectedly}
+   Subject: [rpm 4.11.3] $as_me: $at_fail_list${at_fail_list:+ failed${at_xpass_list:+, }}$at_xpass_list${at_xpass_list:+ passed unexpectedly}
 
 You may investigate any problem if you feel able to do so, in which
 case the test suite provides a good starting point.  Its output may
@@ -2322,7 +2322,7 @@ at_fn_check_prepare_trace "rpmgeneral.at:24"
 at_status=$? at_failed=false
 $at_check_filter
 at_fn_diff_devnull "$at_stderr" || at_failed=:
-echo >>"$at_stdout"; $as_echo "RPM version 4.11.2
+echo >>"$at_stdout"; $as_echo "RPM version 4.11.3
 " | \
   $at_diff - "$at_stdout" || at_failed=:
 at_fn_check_status 0 $at_status "$at_srcdir/rpmgeneral.at:24"
@@ -2351,7 +2351,7 @@ at_fn_check_prepare_trace "rpmgeneral.at:33"
 at_status=$? at_failed=false
 $at_check_filter
 at_fn_diff_devnull "$at_stderr" || at_failed=:
-echo >>"$at_stdout"; $as_echo "RPM version 4.11.2
+echo >>"$at_stdout"; $as_echo "RPM version 4.11.3
 " | \
   $at_diff - "$at_stdout" || at_failed=:
 at_fn_check_status 0 $at_status "$at_srcdir/rpmgeneral.at:33"
@@ -16346,7 +16346,7 @@ python test.py
 at_status=$? at_failed=false
 $at_check_filter
 at_fn_diff_devnull "$at_stderr" || at_failed=:
-echo >>"$at_stdout"; $as_echo "4.11.2
+echo >>"$at_stdout"; $as_echo "4.11.3
 " | \
   $at_diff - "$at_stdout" || at_failed=:
 at_fn_check_status 0 $at_status "$at_srcdir/rpmpython.at:6"

@@ -82,7 +82,7 @@ build_triplet = @build@
 host_triplet = @host@
 subdir = misc
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(top_srcdir)/mkinstalldirs stpncpy.c stpcpy.c fnmatch.c \
+	$(top_srcdir)/mkinstalldirs fnmatch.c stpcpy.c stpncpy.c \
 	$(top_srcdir)/depcomp
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/gettext.m4 \
@@ -261,6 +261,7 @@ RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
+RUNDIR = @RUNDIR@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
