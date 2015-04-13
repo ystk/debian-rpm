@@ -314,6 +314,7 @@ RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
+RUNDIR = @RUNDIR@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -460,7 +461,7 @@ librpmio_la_SOURCES = argv.c base64.c digest.h digest.c macro.c \
 	rpmsw.c url.c rpmio_internal.h rpmhook.h rpmstring.c \
 	rpmfileutil.c rpmglob.c rpmkeyring.c rpmstrpool.c \
 	$(am__append_1) $(am__append_2) $(am__append_5)
-librpmio_la_LDFLAGS = -version-info 5:1:2
+librpmio_la_LDFLAGS = -version-info 5:2:2
 librpmio_la_LIBADD = ../misc/libmisc.la @WITH_NSS_LIB@ \
 	@WITH_BEECRYPT_LIB@ @WITH_BZ2_LIB@ @WITH_ZLIB_LIB@ \
 	@WITH_LIBELF_LIB@ @WITH_POPT_LIB@ @WITH_LZMA_LIB@ -lpthread \

@@ -5,18 +5,18 @@ Subject: Avoid linking with libpython
 --- a/python/Makefile.am
 +++ b/python/Makefile.am
 @@ -12,8 +12,8 @@
- _rpmmodule_la_LDFLAGS = -module -avoid-version -shared
- _rpmmodule_la_LIBADD = \
+ _rpm_la_LDFLAGS = -module -avoid-version -shared
+ _rpm_la_LIBADD = \
  	$(top_builddir)/lib/librpm.la \
 -	$(top_builddir)/rpmio/librpmio.la \
 -	@WITH_PYTHON_LIB@
 +	$(top_builddir)/rpmio/librpmio.la 
 +
  
- _rpmmodule_la_SOURCES = rpmmodule.c rpmsystem-py.h \
+ _rpm_la_SOURCES = rpmmodule.c rpmsystem-py.h \
  	header-py.c header-py.h \
 @@ -34,8 +34,8 @@
- _rpmbmodule_la_LIBADD = \
+ _rpmb_la_LIBADD = \
  	$(top_builddir)/build/librpmbuild.la \
  	$(top_builddir)/lib/librpm.la \
 -	$(top_builddir)/rpmio/librpmio.la \
@@ -24,10 +24,10 @@ Subject: Avoid linking with libpython
 +	$(top_builddir)/rpmio/librpmio.la 
 +
  
- _rpmbmodule_la_SOURCES = rpmbmodule.c rpmsystem-py.h \
+ _rpmb_la_SOURCES = rpmbmodule.c rpmsystem-py.h \
  	spec-py.c spec-py.h
 @@ -44,8 +44,8 @@
- _rpmsmodule_la_LIBADD = \
+ _rpms_la_LIBADD = \
          $(top_builddir)/sign/librpmsign.la \
          $(top_builddir)/lib/librpm.la \
 -        $(top_builddir)/rpmio/librpmio.la \
@@ -35,5 +35,5 @@ Subject: Avoid linking with libpython
 +        $(top_builddir)/rpmio/librpmio.la 
 +
  
- _rpmsmodule_la_SOURCES = rpmsmodule.c rpmsystem-py.h
+ _rpms_la_SOURCES = rpmsmodule.c rpmsystem-py.h
  

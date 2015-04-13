@@ -1,5 +1,5 @@
 AC_PREREQ(2.61)
-AC_INIT(rpm, 4.11.2, rpm-maint@lists.rpm.org)
+AC_INIT(rpm, 4.11.3, rpm-maint@lists.rpm.org)
 
 AC_CONFIG_SRCDIR([rpmqv.c])
 AC_CONFIG_HEADERS([config.h])
@@ -813,6 +813,13 @@ RPMCANONGNU="$host_os_gnu"
 AC_SUBST(RPMCANONVENDOR)
 AC_SUBST(RPMCANONOS)
 AC_SUBST(RPMCANONGNU)
+
+RUNDIR="/run"
+AC_ARG_WITH([rundir], 
+  AS_HELP_STRING([--with-rundir=RUNDIR], [specify run-time variable directory]),
+  [RUNDIR=$withval])
+AC_DEFINE_UNQUOTED([RUNDIR],["${RUNDIR}"],[run-time variable directory])
+AC_SUBST(RUNDIR)
 
 if test X"$prefix" = XNONE ; then
     usrprefix="$ac_default_prefix"

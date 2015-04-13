@@ -1166,6 +1166,10 @@ edit_dwarf2 (DSO *dso)
 		    goto fail;
 		  break;
 #endif
+		case EM_68K:
+		  if (rtype != R_68K_32)
+		    goto fail;
+		  break;
 		default:
 		fail:
 		  error (1, 0, "%s: Unhandled relocation %d in .debug_info section",
@@ -1536,6 +1540,12 @@ main (int argc, char *argv[])
 	  exit (1);
 	}
     }
+
+  /* Ensure clean paths, users can muck with these */
+  if (base_dir)
+    canonicalize_path(base_dir, base_dir);
+  if (dest_dir)
+    canonicalize_path(dest_dir, dest_dir);
 
   /* Make sure there are trailing slashes in dirs */
   if (base_dir != NULL && base_dir[strlen (base_dir)-1] != '/')

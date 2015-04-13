@@ -1,3 +1,340 @@
+commit 7b5db7d98e024ebc582242712e56e603616144c0
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Fri Sep 5 12:30:24 2014 +0300
+
+    Preparing for rpm 4.11.3
+
+commit 892c0fa6f30827b0b501c62af7169878f3113f8c
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Fri Sep 5 12:28:44 2014 +0300
+
+    Update library revisions
+    
+    - No interface changes/additions in this version
+
+commit 1d28cbd575e5a2169a7f157a681cc9d95bcac339
+Author: Lubos Kardos <lkardos@lkardos.brq.redhat.com>
+Date:   Tue Aug 26 14:42:20 2014 +0200
+
+    Fixed double dealocation of ei pointer (RhBug:1133885)
+    
+    (cherry picked from commit 0ab486b8e169edbe66870f5ff43f9dd07ffd2655)
+
+commit 472e1bb43fa6d97f733b7da28624daf17bbc1ac2
+Author: Lubos Kardos <lkardos@lkardos.brq.redhat.com>
+Date:   Mon Jul 28 09:26:05 2014 +0200
+
+    parseSimplePart() returned bad return code in case of failure (RhBug:1123722)
+    
+    (cherry picked from commit 5dfb6e662451ab69e7c3a98191ae773db97be39b)
+
+commit 996de847d6cc222f29c3a7d81e1fa24807f34425
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Mon Jun 16 12:19:06 2014 +0300
+
+    Fix libtool dependency generation with libtool >= 2.4.2
+    
+    - libtool string change broke our scripts and nobody noticed for
+      a long time... Related to RhBug:1061619.
+    
+    (cherry picked from commit cc512d188da8800f38b6d9134ae3efa70cdaedec)
+
+commit ac94b69f2580dbd5f94f0bedcd1e78a6f1ec178d
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Wed Jun 11 13:11:48 2014 +0300
+
+    Avoid pointless large stack alloction (RhBug:1106594)
+    
+    - Within rpm itself, this allocation from 12 years ago doesn't come anywhere
+      close to stack limits on Linux at least, but since we're a library
+      we should be considerate to API users stack needs as well. Allocate
+      the buffer from heap instead, its not performance critical either
+      since this will always be limited by physical IO and digest calculation
+      speed rather than a single malloc.
+    
+    (cherry picked from commit 272033470b8f3485ef700213ae3ab2271d882a72)
+
+commit d80dc2333ef086b638b1be2fccc89caffaac93df
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Wed Jun 11 15:28:36 2014 +0300
+
+    Fix ancient buffer overflow on unterminated macro options
+    
+    - Test for terminating ')' existence before copying, otherwise we'll
+      end up walking over the edge of the world.
+    - Return address from doDefine() on error will likely differ after
+      this, whether that actually affects anything remains to be seen...
+    
+    (cherry picked from commit eb6254269508b37bab88e3ee7deebaf44afca82a)
+
+commit 97248c1698441b96cbefed9a5968775d5a09f9fe
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Mon Jun 9 14:28:20 2014 +0300
+
+    Fix ancient buffer overflows on macro define and undefine (RhBug:1087000)
+    
+    - Both doDefine() and doUndefine() assumed the macro string would
+      always fit into MACROBUFSIZ, which of course is true for any
+      normal use but we cant make such assumptions.
+    - In the case of %define/%global there are various other overrun-issues
+      that need further changes to fix.
+    - Backported from commit 4089316531d2809350fb93450e752ed73b760825
+
+commit ebc926e86ccd4419c8cadaed9bcbd72c0a284d26
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Fri Jun 6 12:31:28 2014 +0300
+
+    Try to cope with duplicate id's and names in verification (ticket #872)
+    
+    - When duplicate user/groupnames or UID/GIDs are present, data can be
+      inconsistent depending on which way the id/name lookup is done.
+      Reporting an error when neither the file ownership or the related
+      user/group entry was changed on the system seems wrong, so try
+      to do better... Look up the data both ways and only fail the
+      verification if data from both is wrong, but warn about duplicates
+      on inconsistent results.
+    
+    (cherry picked from commit 348eea3a4151b1dbe6f9976ef50cd7ba3820fa79)
+
+commit 1e54c5828686883e827a8dec84dd01c02daa5c16
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Mon May 19 16:44:36 2014 +0300
+
+    Plug ages old memleak on package signing
+    
+    (cherry picked from commit ca7373f566f50603fd8c81aa5f8c6fea06298625)
+
+commit dfe7f60dbd4e2a9c4bcd397108ae8178b9a30cc9
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Fri May 9 10:56:46 2014 +0300
+
+    Sometimes a smaller hammer is better (but only sometimes)
+    
+    - The sed-munger added in commit ccd6281e699781e0b00edb16b6e9f4dec6878c15
+      causes bigger breakage than it fixes, perhaps because the hammer
+      applied was disproportionally large. The only thing needing adjustment
+      is ${prefix} in case when localstatedir is not explicitly set, so
+      we fixup just that instead of "everything".
+    - Discovered via RhBug:921973 testing
+    
+    (cherry picked from commit 46993cd3846a8c8935c980e30bbc3718338e2378)
+
+commit e82a723fe63ac9994bdb7b521570549b9e070bba
+Author: Michael Schroeder <mls@suse.de>
+Date:   Wed May 7 09:12:46 2014 +0300
+
+    Add a %_rundir macro to the platform files.
+    
+    The default value is /run, it can be changed with the --with-rundir
+    configure option.
+    
+    Signed-off-by: Panu Matilainen <pmatilai@redhat.com>
+    (cherry picked from commit 13a1ef9fb5a00e7dc8642ad7fbe0b8587191d7fe)
+
+commit 6e2da52d2631534a9aa827ff8a304ff95cce292e
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Mon Apr 14 16:52:05 2014 +0300
+
+    Remember to actually install appdata.prov script
+    
+    - Should've been in commit e6cadc6d5a1d2cf2c61c738808b5f2b212452148
+    
+    (cherry picked from commit 092717b760fbabfc67f8580757a1ae29be9495ec)
+
+commit 5609efba6c596880f1e2f58949909f1f89399738
+Author: Michal Schmidt <mschmidt@redhat.com>
+Date:   Thu Apr 10 13:46:33 2014 +0300
+
+    Expand options in %autopatch only once
+    
+    - Work around scoping "fun" wrt nested parametrized macro invocations
+      combined with macro manipulation from %{lua:...}
+    
+    Signed-off-by: Panu Matilainen <pmatilai@redhat.com>
+    (cherry picked from commit 18e8d2dc0ab05673770854a030b92bac169abcb6)
+
+commit c5d026026c8e9fc8d4b824a5539f001d48dbf51d
+Author: Michal Schmidt <mschmidt@redhat.com>
+Date:   Tue Apr 8 12:31:55 2014 +0200
+
+    add support for "%autosetup -S git_am"
+    
+    - Similar to "%autosetup -S git", but assumes git-formatted patch files
+      and hence preserves authorship information and commit messages.
+    
+    Signed-off-by: Panu Matilainen <pmatilai@redhat.com>
+    (cherry picked from commit bf02debf73b4cad3aa344d5698af82c28619a248)
+
+commit 4f497bc676f142d009d7f4fdbb6b52e6c37a07ae
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Apr 3 14:47:48 2014 +0300
+
+    Hopefully fix in-tree python build with setup.py
+    
+    - Detect in-tree build in setup.py and adjust paths accordingly,
+      based on patch by Bohuslav Kabrda.
+    
+    (cherry picked from commit f996665e2fe6388a1e9f71ccd07c723e256a8fb3)
+
+commit 1709eeefd45fffc97f682b53ad29fd5bccf3b137
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Apr 3 14:29:14 2014 +0300
+
+    Drop the stupid source globbing from setup.py
+    
+    - What was I thinking? Trying to be lazy in a way that only created
+      more work, and breaks easily
+    - Backported from commit f5134cef0c59152c5523dd5ea5ca5e651ba088c5
+
+commit c9d1188eab780bcce808b504e0f280a9e7c39af2
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Apr 3 12:14:06 2014 +0300
+
+    Add a "release" target to Makefile.maint, mainly for changelog updating atm
+    
+    (cherry picked from commit a1f62c26e0e2f7f9e17c700ffa07510e4534cb2a)
+
+commit 7f09c1b9bf85cf008a5517123f49bd690e088248
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Wed Mar 26 09:37:32 2014 +0200
+
+    Reset progress for src.rpm installation (RhBug:984724)
+    
+    - Installation of binaries and sources are very different types of
+      operations, this makes it more obvious when mixing binaries and
+      sources in -U/-i operation. The progress report for sources is
+      not identical to binaries but at least it doesn't exceed 100%.
+    - Combining src.rpm and binary install in the same command is more
+      likely a mistake than intended, but preserving the functionality
+      in case somebody relies on it.
+    
+    (cherry picked from commit 4098bfd7fa94c89f70c162c46fcd3627c282a102)
+
+commit 7631aea1f2a073895f225169731971d01fb54f6b
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Wed Mar 26 09:32:53 2014 +0200
+
+    Move progress state variable out of the function to permit resetting
+    
+    (cherry picked from commit 902b24c214d76073216ffe8f2df13c3e28f4876a)
+
+commit bf58bc92ff755448c2542996851976cc39cc63e1
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Tue Mar 25 14:06:34 2014 +0200
+
+    Ensure clean paths are used for matching in debugedit (RhBug:1077148)
+    
+    - Things like extra slashes can cause sources not to be found at all
+      due to path prefix matching, canonicalize the argument paths first.
+    
+    (cherry picked from commit 91456b1bb8e93deef683a9c40b1fe7f1de3da99e)
+
+commit 175675a1dd96bba53f19ae86b97515c6ead9c32f
+Author: Andreas Schwab <schwab@linux-m68k.org>
+Date:   Wed Mar 12 15:16:15 2014 +0100
+
+    Add support for m68k
+    
+    Tested on m68k-suse-linux.
+    
+    Signed-off-by: Panu Matilainen <pmatilai@redhat.com>
+    (cherry picked from commit bc66cb3480d05aad562ad55c6ad63ff71b57cd9f)
+
+commit c90f1f8a20197dec54b92df7b61cf15e54c5b2ed
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Fri Mar 21 12:36:35 2014 +0200
+
+    Reset file actions between rpmtsRun() calls (RhBug:1076552)
+    
+    - When the world changes underneath us (eg by %pretrans hackery)
+      between test-transaction and actual transaction, in some cases
+      the file action does not get recomputed if already set.
+      Always reset file actions to FA_UNKNOWN before disposition
+      calculations to ensure have a clean starting point.
+    - Backported from commit f311fb65eea4791fa15a00412384b96fdccbbf1c
+
+commit 4493914249889eedf66f9f158df06ca2df3a3f00
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Mon Mar 17 10:27:48 2014 +0200
+
+    Disable curl globbing for remote retrievals
+    
+    - urlGetFile() can only handle one file at a time, so globbing does
+      not make sense and only confuses us. Besides, useful things like
+      'rpm -Uvh http://somewhere.org/foo-1.2-1.{i386,x86_64}.rpm'
+      work just as well without curl-level globbing.
+    - Incidentally this is also the documented workaround for using
+      IPv6 numerical addresses with curl (RhBug:1076277)
+    
+    (cherry picked from commit 409fa83c94d50ab0c4849b737f2647e1069aea8b)
+
+commit bef928dd013338dca66a0f2bb04cd450d7b3968b
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Tue Feb 18 18:13:54 2014 +0200
+
+    Make room for SHA224 in digest bundles. Doh.
+    
+    - Should've really been in commit 20cfa7d2b4c927798ad38126821d194fafd93ffe
+      but at the time NSS didn't even support SHA-224 so it was untestable.
+      Now that it does, and somebody actually bothered to test...
+      Fixes RhBug:1066494.
+    
+    (cherry picked from commit 85b62554d2632d06f975f90697c4c11c3f180931)
+
+commit 868567acf10f376ffe70df7139d72371901ef10c
+Author: Brian Elliott Finley <brian@thefinleys.com>
+Date:   Tue Feb 18 15:26:22 2014 +0200
+
+    Don't match use or requires within a multi-line print statement
+    
+    Signed-off-by: Panu Matilainen <pmatilai@redhat.com>
+    (cherry picked from commit 0d5929ba5eabadec49273bb090ba9158dfccc30c)
+
+commit f3801bccb9eb068a747ca63a4b01518a260d9919
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Feb 13 13:25:03 2014 +0200
+
+    Build python 3 compatibile module names
+    
+    - Python 2 accepts foomodule.so as an alias for foo.so, Python 3 does
+      not. Build foo.so names which works with both...
+    
+    (cherry picked from commit 1197c9d3eb60b6af4ab59a02c4318d235c6117d6)
+
+commit ddc7ff28e14064f57c6917e133a95e73f749cf41
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Feb 13 13:08:36 2014 +0200
+
+    Python 3 doesn't have nb_divide in PyNumberMethods
+    
+    (cherry picked from commit 05740e1d67b972a7909c1950dca7bb2ec4e35a60)
+
+commit 2c6e0366ffc6bdbafbdf82df7fcedd975a361465
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Feb 13 13:07:40 2014 +0200
+
+    Fix signing module methods missing on python3, duh
+    
+    (cherry picked from commit a021aca8fda8fcb2f521e1816b78c4f8bb640706)
+
+commit 71527b6fbd2b3898beabd602c462a01b691d67d8
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Feb 13 12:58:18 2014 +0200
+
+    Python 2/3 compat define for PyInt_AsSsize_t, used by rpmfiles
+    
+    (cherry picked from commit 42d502d0180002224e64ab766b3f09846be6eb56)
+
+commit 5ed21bbbba978e56bdba5a30e723a138f1f686b9
+Author: Panu Matilainen <pmatilai@redhat.com>
+Date:   Thu Feb 13 12:54:41 2014 +0200
+
+    Fix build and sign module initialization in python3 (RhBug:1064758)
+    
+    - PyInit_foo() name needs to match the module name. Doh.
+    
+    (cherry picked from commit 0073376965ee8d8df63c21b0da634fc315c97d0b)
+
 commit 57b8595259cb27e611ff36863bd3e785e0f5d140
 Author: Panu Matilainen <pmatilai@redhat.com>
 Date:   Thu Feb 13 08:45:52 2014 +0200

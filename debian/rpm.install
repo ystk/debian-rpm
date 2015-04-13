@@ -27,6 +27,7 @@ usr/lib/rpm/desktop-file.prov
 usr/lib/rpm/ocaml-find-provides.sh
 usr/lib/rpm/fileattrs
 usr/lib/rpm/rpm.supp
+usr/lib/rpm/appdata.prov
 usr/share/man/man1/*
 usr/share/man/man8/rpm.*
 usr/share/man/man8/rpm[a-z]*.*

@@ -383,6 +383,7 @@ RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
+RUNDIR = @RUNDIR@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -548,7 +549,7 @@ librpm_la_SOURCES = backend/dbconfig.c backend/db3.c backend/dbi.h \
 	verify.c rpmlock.c rpmlock.h misc.h rpmscript.h rpmscript.c \
 	legacy.c merge.c rpmchroot.c rpmchroot.h rpmplugins.c \
 	rpmplugins.h rpmug.c rpmug.h $(am__append_3)
-librpm_la_LDFLAGS = -version-info 5:1:2
+librpm_la_LDFLAGS = -version-info 5:2:2
 librpm_la_LIBADD = $(top_builddir)/rpmio/librpmio.la @WITH_POPT_LIB@ \
 	@WITH_SELINUX_LIB@ @WITH_CAP_LIB@ @WITH_ACL_LIB@ @LIBINTL@ \
 	$(am__append_2) $(am__append_4) $(am__append_5)

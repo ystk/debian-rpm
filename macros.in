@@ -1020,7 +1020,7 @@ done \
 # for any special local needs use %__urlhelper_localopts in system-wide
 # or per-user macro configuration.
 %__urlhelpercmd         @__CURL@
-%__urlhelperopts        --silent --show-error --fail --location -o
+%__urlhelperopts        --silent --show-error --fail --globoff --location -o
 %__urlhelper_proxyopts   %{?_httpproxy:--proxy %{_httpproxy}%{?_httpport::%{_httpport}}}%{!?_httpproxy:%{nil}}
 %_urlhelper             %{__urlhelpercmd} %{?__urlhelper_localopts} %{?__urlhelper_proxyopts} %{__urlhelperopts}
 
@@ -1069,6 +1069,13 @@ done \
 %{__git} apply --index %{-p:-p%{-p*}} -\
 %{__git} commit %{-q} -m %{-m*} --author "%{__scm_author}"
 
+# Git, using "git am" (-m is unused)
+%__scm_setup_git_am(q)\
+%{expand:%__scm_setup_git %{-q}}
+
+%__scm_apply_git_am(qp:m:)\
+%{__git} am %{-q} %{-p:-p%{-p*}}
+
 # Quilt
 %__scm_setup_quilt(q) %{nil}
 %__scm_apply_quilt(qp:m:)\
@@ -1093,8 +1100,9 @@ done \
 # Automatically apply all patches
 %autopatch(vp:)\
 %{lua:\
+local options = rpm.expand("%{!-v:-q} %{-p:-p%{-p*}} ")\
 for i, p in ipairs(patches) do\
-    print(rpm.expand("%apply_patch -m %{basename:"..p.."}  "..rpm.expand("%{!-v:-q} %{-p:-p%{-p*}} ")..p.."\\n"))\
+    print(rpm.expand("%apply_patch -m %{basename:"..p.."}  "..options..p.."\\n"))\
 end}
 
 # One macro to (optionally) do it all.

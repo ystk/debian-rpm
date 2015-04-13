@@ -298,6 +298,7 @@ RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
+RUNDIR = @RUNDIR@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -445,7 +446,7 @@ librpmbuild_la_SOURCES = \
 	parsePolicies.c policies.c \
 	rpmbuild_internal.h rpmbuild_misc.h
 
-librpmbuild_la_LDFLAGS = -version-info 5:1:2
+librpmbuild_la_LDFLAGS = -version-info 5:2:2
 librpmbuild_la_LIBADD = \
 	$(top_builddir)/lib/librpm.la \
 	$(top_builddir)/rpmio/librpmio.la \

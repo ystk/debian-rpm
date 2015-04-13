@@ -130,38 +130,36 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(pkgpyexecdir)" \
 	"$(DESTDIR)$(pkgpyexecdir)"
 LTLIBRARIES = $(pkgpyexec_LTLIBRARIES)
-_rpmbmodule_la_DEPENDENCIES = $(top_builddir)/build/librpmbuild.la \
-	$(top_builddir)/lib/librpm.la \
+_rpm_la_DEPENDENCIES = $(top_builddir)/lib/librpm.la \
 	$(top_builddir)/rpmio/librpmio.la
-am__rpmbmodule_la_OBJECTS = rpmbmodule.lo spec-py.lo
-_rpmbmodule_la_OBJECTS = $(am__rpmbmodule_la_OBJECTS)
+am__rpm_la_OBJECTS = rpmmodule.lo header-py.lo rpmds-py.lo rpmfd-py.lo \
+	rpmfi-py.lo rpmkeyring-py.lo rpmmi-py.lo rpmii-py.lo \
+	rpmps-py.lo rpmmacro-py.lo rpmstrpool-py.lo rpmtd-py.lo \
+	rpmte-py.lo rpmts-py.lo
+_rpm_la_OBJECTS = $(am__rpm_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-_rpmbmodule_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
-	$(AM_CFLAGS) $(CFLAGS) $(_rpmbmodule_la_LDFLAGS) $(LDFLAGS) -o \
-	$@
-_rpmmodule_la_DEPENDENCIES = $(top_builddir)/lib/librpm.la \
-	$(top_builddir)/rpmio/librpmio.la
-am__rpmmodule_la_OBJECTS = rpmmodule.lo header-py.lo rpmds-py.lo \
-	rpmfd-py.lo rpmfi-py.lo rpmkeyring-py.lo rpmmi-py.lo \
-	rpmii-py.lo rpmps-py.lo rpmmacro-py.lo rpmstrpool-py.lo \
-	rpmtd-py.lo rpmte-py.lo rpmts-py.lo
-_rpmmodule_la_OBJECTS = $(am__rpmmodule_la_OBJECTS)
-_rpmmodule_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+_rpm_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
-	$(_rpmmodule_la_LDFLAGS) $(LDFLAGS) -o $@
-_rpmsmodule_la_DEPENDENCIES = $(top_builddir)/sign/librpmsign.la \
+	$(_rpm_la_LDFLAGS) $(LDFLAGS) -o $@
+_rpmb_la_DEPENDENCIES = $(top_builddir)/build/librpmbuild.la \
 	$(top_builddir)/lib/librpm.la \
 	$(top_builddir)/rpmio/librpmio.la
-am__rpmsmodule_la_OBJECTS = rpmsmodule.lo
-_rpmsmodule_la_OBJECTS = $(am__rpmsmodule_la_OBJECTS)
-_rpmsmodule_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
-	$(AM_CFLAGS) $(CFLAGS) $(_rpmsmodule_la_LDFLAGS) $(LDFLAGS) -o \
-	$@
+am__rpmb_la_OBJECTS = rpmbmodule.lo spec-py.lo
+_rpmb_la_OBJECTS = $(am__rpmb_la_OBJECTS)
+_rpmb_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(_rpmb_la_LDFLAGS) $(LDFLAGS) -o $@
+_rpms_la_DEPENDENCIES = $(top_builddir)/sign/librpmsign.la \
+	$(top_builddir)/lib/librpm.la \
+	$(top_builddir)/rpmio/librpmio.la
+am__rpms_la_OBJECTS = rpmsmodule.lo
+_rpms_la_OBJECTS = $(am__rpms_la_OBJECTS)
+_rpms_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(_rpms_la_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -196,10 +194,9 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(_rpmbmodule_la_SOURCES) $(_rpmmodule_la_SOURCES) \
-	$(_rpmsmodule_la_SOURCES)
-DIST_SOURCES = $(_rpmbmodule_la_SOURCES) $(_rpmmodule_la_SOURCES) \
-	$(_rpmsmodule_la_SOURCES)
+SOURCES = $(_rpm_la_SOURCES) $(_rpmb_la_SOURCES) $(_rpms_la_SOURCES)
+DIST_SOURCES = $(_rpm_la_SOURCES) $(_rpmb_la_SOURCES) \
+	$(_rpms_la_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -319,6 +316,7 @@ RPMCANONGNU = @RPMCANONGNU@
 RPMCANONOS = @RPMCANONOS@
 RPMCANONVENDOR = @RPMCANONVENDOR@
 RPMCONFIGDIR = @RPMCONFIGDIR@
+RUNDIR = @RUNDIR@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -456,15 +454,15 @@ top_srcdir = @top_srcdir@
 EXTRA_DIST = rpm/__init__.py rpm/transaction.py
 AM_CPPFLAGS = -I$(top_builddir)/include/ -I$(top_srcdir)/python \
 	-I@WITH_PYTHON_INCLUDE@
-pkgpyexec_LTLIBRARIES = _rpmmodule.la _rpmbmodule.la _rpmsmodule.la
+pkgpyexec_LTLIBRARIES = _rpm.la _rpmb.la _rpms.la
 pkgpyexec_DATA = rpm/__init__.py rpm/transaction.py
-_rpmmodule_la_LDFLAGS = -module -avoid-version -shared
-_rpmmodule_la_LIBADD = \
+_rpm_la_LDFLAGS = -module -avoid-version -shared
+_rpm_la_LIBADD = \
 	$(top_builddir)/lib/librpm.la \
 	$(top_builddir)/rpmio/librpmio.la \
 	@WITH_PYTHON_LIB@
 
-_rpmmodule_la_SOURCES = rpmmodule.c rpmsystem-py.h \
+_rpm_la_SOURCES = rpmmodule.c rpmsystem-py.h \
 	header-py.c header-py.h \
 	rpmds-py.c rpmds-py.h \
 	rpmfd-py.c rpmfd-py.h \
@@ -479,24 +477,24 @@ _rpmmodule_la_SOURCES = rpmmodule.c rpmsystem-py.h \
 	rpmte-py.c rpmte-py.h \
 	rpmts-py.c rpmts-py.h
 
-_rpmbmodule_la_LDFLAGS = -module -avoid-version -shared
-_rpmbmodule_la_LIBADD = \
+_rpmb_la_LDFLAGS = -module -avoid-version -shared
+_rpmb_la_LIBADD = \
 	$(top_builddir)/build/librpmbuild.la \
 	$(top_builddir)/lib/librpm.la \
 	$(top_builddir)/rpmio/librpmio.la \
 	@WITH_PYTHON_LIB@
 
-_rpmbmodule_la_SOURCES = rpmbmodule.c rpmsystem-py.h \
+_rpmb_la_SOURCES = rpmbmodule.c rpmsystem-py.h \
 	spec-py.c spec-py.h
 
-_rpmsmodule_la_LDFLAGS = -module -avoid-version -shared
-_rpmsmodule_la_LIBADD = \
+_rpms_la_LDFLAGS = -module -avoid-version -shared
+_rpms_la_LIBADD = \
         $(top_builddir)/sign/librpmsign.la \
         $(top_builddir)/lib/librpm.la \
         $(top_builddir)/rpmio/librpmio.la \
         @WITH_PYTHON_LIB@
 
-_rpmsmodule_la_SOURCES = rpmsmodule.c rpmsystem-py.h
+_rpms_la_SOURCES = rpmsmodule.c rpmsystem-py.h
 all: all-am
 
 .SUFFIXES:
@@ -569,14 +567,14 @@ clean-pkgpyexecLTLIBRARIES:
 	  rm -f $${locs}; \
 	}
 
-_rpmbmodule.la: $(_rpmbmodule_la_OBJECTS) $(_rpmbmodule_la_DEPENDENCIES) $(EXTRA__rpmbmodule_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(_rpmbmodule_la_LINK) -rpath $(pkgpyexecdir) $(_rpmbmodule_la_OBJECTS) $(_rpmbmodule_la_LIBADD) $(LIBS)
+_rpm.la: $(_rpm_la_OBJECTS) $(_rpm_la_DEPENDENCIES) $(EXTRA__rpm_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(_rpm_la_LINK) -rpath $(pkgpyexecdir) $(_rpm_la_OBJECTS) $(_rpm_la_LIBADD) $(LIBS)
 
-_rpmmodule.la: $(_rpmmodule_la_OBJECTS) $(_rpmmodule_la_DEPENDENCIES) $(EXTRA__rpmmodule_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(_rpmmodule_la_LINK) -rpath $(pkgpyexecdir) $(_rpmmodule_la_OBJECTS) $(_rpmmodule_la_LIBADD) $(LIBS)
+_rpmb.la: $(_rpmb_la_OBJECTS) $(_rpmb_la_DEPENDENCIES) $(EXTRA__rpmb_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(_rpmb_la_LINK) -rpath $(pkgpyexecdir) $(_rpmb_la_OBJECTS) $(_rpmb_la_LIBADD) $(LIBS)
 
-_rpmsmodule.la: $(_rpmsmodule_la_OBJECTS) $(_rpmsmodule_la_DEPENDENCIES) $(EXTRA__rpmsmodule_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(_rpmsmodule_la_LINK) -rpath $(pkgpyexecdir) $(_rpmsmodule_la_OBJECTS) $(_rpmsmodule_la_LIBADD) $(LIBS)
+_rpms.la: $(_rpms_la_OBJECTS) $(_rpms_la_DEPENDENCIES) $(EXTRA__rpms_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(_rpms_la_LINK) -rpath $(pkgpyexecdir) $(_rpms_la_OBJECTS) $(_rpms_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)

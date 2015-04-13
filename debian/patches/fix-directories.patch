@@ -40,7 +40,7 @@ Author: Michal Čihař <nijel@debian.org>
  	(the build will take longer since both dep and strace are pigs)
 --- a/macros.in
 +++ b/macros.in
-@@ -799,7 +799,7 @@
+@@ -801,7 +801,7 @@
  %_datadir		%{_prefix}/share
  %_sysconfdir		/etc
  %_sharedstatedir	%{_prefix}/com
@@ -59,4 +59,4 @@ Author: Michal Čihař <nijel@debian.org>
 +%_initddir		%{_sysconfdir}/init.d
  # Deprecated misspelling, present for backwards compatibility.
  %_initrddir		%{_initddir}
- 
+ %_rundir		@RUNDIR@

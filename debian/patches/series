@@ -13,3 +13,5 @@ lua-libname.patch
 rpm-4.10.90-rpmlib-filesystem-check.patch
 fix-python-multiarch-include.patch
 rpm-4.11.2-double-separator-warning.patch
+CVE-2014-8118.patch
+CVE-2013-6435.patch
